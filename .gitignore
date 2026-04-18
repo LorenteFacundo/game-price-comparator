@@ -1,0 +1,6 @@
+backend/.env
+backend/backend.exe
+backend/*.exe
+node_modules/
+frontend/dist/
+frontend/node_modules/

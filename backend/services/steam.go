@@ -1,0 +1,128 @@
+package services
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+type SteamService struct {
+	client *http.Client
+}
+
+type SteamPrice struct {
+	PriceUSD   float64 // Cambiado de PriceARS
+	RegularUSD float64 // Cambiado de RegularARS
+	Discount   int
+	URL        string
+	Found      bool
+}
+
+type steamResponse map[string]struct {
+	Success bool `json:"success"`
+	Data    struct {
+		PriceOverview struct {
+			Currency        string `json:"currency"`
+			Initial         int    `json:"initial"`
+			Final           int    `json:"final"`
+			DiscountPercent int    `json:"discount_percent"`
+			FinalFormatted  string `json:"final_formatted"`
+		} `json:"price_overview"`
+		Steam_Appid int    `json:"steam_appid"`
+		Name        string `json:"name"`
+	} `json:"data"`
+}
+
+func NewSteamService() *SteamService {
+	return &SteamService{
+		client: &http.Client{Timeout: 8 * time.Second},
+	}
+}
+
+// GetPriceByTitle busca el appid en Steam y trae el precio regional AR
+func (s *SteamService) GetPriceByTitle(title string) (*SteamPrice, error) {
+	appID, err := s.searchAppID(title)
+	if err != nil || appID == "" {
+		return &SteamPrice{Found: false}, nil
+	}
+	return s.GetPriceByAppID(appID)
+}
+
+func (s *SteamService) GetPriceByAppID(appID string) (*SteamPrice, error) {
+	endpoint := fmt.Sprintf(
+		"https://store.steampowered.com/api/appdetails?appids=%s&country=AR&filters=price_overview",
+		appID,
+	)
+
+	resp, err := s.client.Get(endpoint)
+	if err != nil {
+		return &SteamPrice{Found: false}, nil
+	}
+	defer resp.Body.Close()
+
+	var data steamResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return &SteamPrice{Found: false}, nil
+	}
+
+	entry, ok := data[appID]
+	if !ok || !entry.Success {
+		return &SteamPrice{Found: false}, nil
+	}
+
+	po := entry.Data.PriceOverview
+	if po.Final == 0 && po.Initial == 0 {
+		return &SteamPrice{Found: false}, nil
+	}
+
+	return &SteamPrice{
+		PriceUSD:   float64(po.Final) / 100.0,
+		RegularUSD: float64(po.Initial) / 100.0,
+		Discount:   po.DiscountPercent,
+		URL:        fmt.Sprintf("https://store.steampowered.com/app/%s/", appID),
+		Found:      true,
+	}, nil
+}
+
+// searchAppID busca el appid de Steam por título usando la búsqueda de Steam
+func (s *SteamService) searchAppID(title string) (string, error) {
+	endpoint := fmt.Sprintf(
+		"https://store.steampowered.com/api/storesearch?term=%s&l=spanish&cc=AR",
+		url.QueryEscape(title),
+	)
+
+	resp, err := s.client.Get(endpoint)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Items []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if len(result.Items) == 0 {
+		return "", fmt.Errorf("no se encontraron resultados")
+	}
+
+	// 1. Buscar coincidencia EXACTA primero (Para que "Hades" no agarre "Hades II" ni Bundles)
+	for _, item := range result.Items {
+		if strings.EqualFold(item.Name, title) {
+			return fmt.Sprintf("%d", item.ID), nil
+		}
+	}
+
+	// 2. Fallback: Si no hay coincidencia exacta (ej: buscaste "Hades 2" y Steam devuelve "Hades II")
+	// Steam es inteligente y lo pone en la posición 0.
+	return fmt.Sprintf("%d", result.Items[0].ID), nil
+}
