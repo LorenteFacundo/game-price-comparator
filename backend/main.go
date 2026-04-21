@@ -40,9 +40,16 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	frontendURL := os.Getenv("FRONTEND_URL")
+	allowedOrigins := []string{"http://localhost:5173", "http://localhost:3000"}
+
+	if frontendURL != "" {
+		allowedOrigins = append(allowedOrigins, frontendURL)
+	}
+
 	// CORS para que el frontend React pueda conectarse
 	handler := cors.New(cors.Options{
-		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"GET"},
 	}).Handler(mux)
 
