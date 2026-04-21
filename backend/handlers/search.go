@@ -82,7 +82,7 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if len(itadResults) > 0 {
 		main := itadResults[0]
 
-		// 1. Filtramos Steam de ITAD (que tiene precios viejos)
+		// 1. Filtramos Steam de ITAD (tiene precios desactualizados)
 		filtered := []models.StorePrice{}
 		for _, p := range main.Prices {
 			if !strings.Contains(strings.ToLower(p.StoreName), "steam") {
@@ -92,11 +92,13 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		main.Prices = filtered
 
 		// 2. Inyectamos Steam regional en tiempo real
+		// steam.go usa country=AR → los precios ya vienen en ARS
 		if steamPrice != nil && steamPrice.Found {
 			steamStore := models.StorePrice{
 				StoreName:  "Steam",
-				PriceUSD:   steamPrice.PriceUSD,
-				RegularUSD: steamPrice.RegularUSD,
+				PriceARS:   steamPrice.PriceARS,
+				RegularARS: steamPrice.RegularARS,
+				// PriceUSD queda en 0; la comparación usará PriceARS directamente
 				Discount:   steamPrice.Discount,
 				URL:        steamPrice.URL,
 				OnSale:     steamPrice.Discount > 0,
@@ -105,65 +107,62 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			main.Prices = append([]models.StorePrice{steamStore}, main.Prices...)
 		}
 
-		// Instant Gaming — link directo sin precio (scraping bloqueado)
+		// 3. Tiendas sin precio en tiempo real — links directos
 		main.Prices = append(main.Prices, models.StorePrice{
 			StoreName: "Instant Gaming",
 			URL:       fmt.Sprintf("https://www.instant-gaming.com/es/busqueda/?q=%s", url.QueryEscape(query)),
 		})
 
-		// Eneba — link directo sin precio
 		main.Prices = append(main.Prices, models.StorePrice{
 			StoreName: "Eneba",
 			URL:       fmt.Sprintf("https://www.eneba.com/store/all?text=%s", url.QueryEscape(query)),
 		})
 
-		// G2A — link directo sin precio
 		main.Prices = append(main.Prices, models.StorePrice{
 			StoreName: "G2A",
 			URL:       fmt.Sprintf("https://www.g2a.com/search?query=%s", url.QueryEscape(query)),
 		})
 
-		// MundoSteam — siempre con advertencia, nunca como mejor deal
 		main.Prices = append(main.Prices, models.StorePrice{
 			StoreName: "MundoSteam",
 			URL:       fmt.Sprintf("https://mundosteam.com/buscar?q=%s", url.QueryEscape(query)),
 			Warning:   "Esta tienda vende acceso a cuentas compartidas, no el juego en tu cuenta personal. No recomendamos su uso.",
 		})
 
-		// Calculamos best deal ignorando tiendas sin precio y MundoSteam
-		var best *models.StorePrice
+		// 4. Calculamos best deal DESPUÉS de todos los appends,
+		//    usando índice en vez de puntero para evitar punteros invalidados por realloc.
+		//    Ignoramos tiendas sin precio y MundoSteam.
+		bestIdx := -1
+		bestPesos := 0.0
+
 		for i := range main.Prices {
-			p := &main.Prices[i]
+			p := main.Prices[i]
 
 			if p.StoreName == "MundoSteam" {
 				continue
 			}
 
-			// Unificamos el precio a pesos para poder comparar manzanas con manzanas
+			// Precio en pesos: usamos PriceARS directo, o convertimos PriceUSD si es necesario
 			precioPesos := p.PriceARS
-			if precioPesos == 0 && p.PriceUSD > 0 {
+			if precioPesos == 0 && p.PriceUSD > 0 && usdRate > 0 {
 				precioPesos = p.PriceUSD * usdRate
 			}
 
-			// Si no tiene precio ni en dólares ni en pesos, lo salteamos
+			// Sin precio → saltar (links directos como IG/Eneba/G2A)
 			if precioPesos == 0 {
 				continue
 			}
 
-			if best == nil {
-				best = p
-			} else {
-				bestPesos := best.PriceARS
-				if bestPesos == 0 && best.PriceUSD > 0 {
-					bestPesos = best.PriceUSD * usdRate
-				}
-
-				if precioPesos < bestPesos {
-					best = p
-				}
+			if bestIdx == -1 || precioPesos < bestPesos {
+				bestIdx = i
+				bestPesos = precioPesos
 			}
 		}
-		main.BestDeal = best
+
+		if bestIdx >= 0 {
+			best := main.Prices[bestIdx]
+			main.BestDeal = &best
+		}
 
 		finalResults = append(finalResults, main)
 		finalResults = append(finalResults, itadResults[1:]...)

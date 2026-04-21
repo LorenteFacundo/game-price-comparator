@@ -14,8 +14,8 @@ type SteamService struct {
 }
 
 type SteamPrice struct {
-	PriceUSD   float64 // Cambiado de PriceARS
-	RegularUSD float64 // Cambiado de RegularARS
+	PriceARS   float64 // Precio en ARS (endpoint country=AR)
+	RegularARS float64 // Precio regular en ARS
 	Discount   int
 	URL        string
 	Found      bool
@@ -78,9 +78,10 @@ func (s *SteamService) GetPriceByAppID(appID string) (*SteamPrice, error) {
 		return &SteamPrice{Found: false}, nil
 	}
 
+	// El endpoint country=AR devuelve precios en ARS (centavos → pesos)
 	return &SteamPrice{
-		PriceUSD:   float64(po.Final) / 100.0,
-		RegularUSD: float64(po.Initial) / 100.0,
+		PriceARS:   float64(po.Final) / 100.0,
+		RegularARS: float64(po.Initial) / 100.0,
 		Discount:   po.DiscountPercent,
 		URL:        fmt.Sprintf("https://store.steampowered.com/app/%s/", appID),
 		Found:      true,
@@ -115,14 +116,13 @@ func (s *SteamService) searchAppID(title string) (string, error) {
 		return "", fmt.Errorf("no se encontraron resultados")
 	}
 
-	// 1. Buscar coincidencia EXACTA primero (Para que "Hades" no agarre "Hades II" ni Bundles)
+	// 1. Buscar coincidencia EXACTA primero
 	for _, item := range result.Items {
 		if strings.EqualFold(item.Name, title) {
 			return fmt.Sprintf("%d", item.ID), nil
 		}
 	}
 
-	// 2. Fallback: Si no hay coincidencia exacta (ej: buscaste "Hades 2" y Steam devuelve "Hades II")
-	// Steam es inteligente y lo pone en la posición 0.
+	// 2. Fallback: primer resultado
 	return fmt.Sprintf("%d", result.Items[0].ID), nil
 }
