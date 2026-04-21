@@ -3,6 +3,7 @@ import { searchGame } from './api/search'
 import SearchBar from './components/SearchBar'
 import GameCard from './components/GameCard'
 import StoreButtons from './components/StoreButtons'
+import Footer from './components/Footer'
 
 export default function App() {
   const [results, setResults] = useState(null)
@@ -134,6 +135,7 @@ export default function App() {
           ))}
         </div>
       )}
+      <Footer />
     </div>
   )
 }
