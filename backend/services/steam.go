@@ -45,19 +45,24 @@ func NewSteamService() *SteamService {
 	}
 }
 
-// GetPriceByTitle busca el appid en Steam y trae el precio regional AR
-func (s *SteamService) GetPriceByTitle(title string) (*SteamPrice, error) {
+// GetPriceByTitle busca el appid en Steam y trae el precio para el pais indicado.
+func (s *SteamService) GetPriceByTitle(title, country string) (*SteamPrice, error) {
 	appID, err := s.searchAppID(title)
 	if err != nil || appID == "" {
 		return &SteamPrice{Found: false}, nil
 	}
-	return s.GetPriceByAppID(appID)
+	return s.GetPriceByAppID(appID, country)
 }
 
-func (s *SteamService) GetPriceByAppID(appID string) (*SteamPrice, error) {
+func (s *SteamService) GetPriceByAppID(appID, country string) (*SteamPrice, error) {
+	if country == "" {
+		country = "AR"
+	}
+
 	endpoint := fmt.Sprintf(
-		"https://store.steampowered.com/api/appdetails?appids=%s&country=AR&filters=price_overview",
+		"https://store.steampowered.com/api/appdetails?appids=%s&country=%s&filters=price_overview",
 		appID,
+		url.QueryEscape(strings.ToUpper(country)),
 	)
 
 	resp, err := s.client.Get(endpoint)

@@ -20,6 +20,11 @@ export default function PriceRow({ price, usdRate, showARS, isBest }) {
 
   const sinPrecio = arsPrice === 0 && usdPrice === 0
   const esMundoSteam = price.store_name === 'MundoSteam'
+  const steamEnUSDParaArgentina =
+    price.store_name === 'Steam' &&
+    price.is_regional &&
+    price.price_usd > 0 &&
+    price.price_ars === 0
 
   const displayPrice = showARS ? formatARS(arsPrice) : formatUSD(usdPrice)
   const displayRegular = showARS ? formatARS(arsRegular) : formatUSD(usdRegular)
@@ -44,9 +49,7 @@ export default function PriceRow({ price, usdRate, showARS, isBest }) {
       gap: '12px',
       opacity: esMundoSteam ? 0.8 : 1,
     }}>
-
-      {/* Nombre de tienda + badges */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
         {isBest && !esMundoSteam && (
           <span style={{
             background: 'var(--green)',
@@ -80,6 +83,17 @@ export default function PriceRow({ price, usdRate, showARS, isBest }) {
             whiteSpace: 'nowrap',
           }}>REGIONAL</span>
         )}
+        {steamEnUSDParaArgentina && (
+          <span style={{
+            background: 'rgba(255,179,64,0.15)',
+            color: 'var(--amber)',
+            fontSize: '10px',
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: '20px',
+            whiteSpace: 'nowrap',
+          }}>STEAM AR EN USD</span>
+        )}
         <span style={{
           fontSize: '14px',
           color: esMundoSteam ? '#ff8888' : isBest ? 'var(--text)' : 'var(--muted)',
@@ -102,7 +116,6 @@ export default function PriceRow({ price, usdRate, showARS, isBest }) {
         )}
       </div>
 
-      {/* Precio */}
       <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
         {esMundoSteam ? (
           <div style={{ fontSize: '12px', color: '#ff8888', maxWidth: '140px', textAlign: 'right', lineHeight: 1.3 }}>
@@ -126,12 +139,15 @@ export default function PriceRow({ price, usdRate, showARS, isBest }) {
                 {displayRegular}
               </div>
             )}
+            {steamEnUSDParaArgentina && showARS && (
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '3px' }}>
+                Precio base en USD convertido a ARS
+              </div>
+            )}
           </>
         )}
       </div>
 
-      {/* Botón */}
-      
       <a
         href={price.url}
         target="_blank"

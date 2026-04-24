@@ -1,11 +1,10 @@
 import axios from 'axios'
 
-// Usa la variable de entorno, o localhost si falla
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
-export async function searchGame(query) {
+export async function searchGame(query, steamMode = 'regional') {
   const { data } = await axios.get(`${BASE_URL}/api/search`, {
-    params: { q: query }
+    params: { q: query, steam_mode: steamMode }
   })
   return data
 }
@@ -29,7 +28,7 @@ export function getDisplayPrice(price, showARS, usdRate) {
 }
 
 export function formatARS(amount) {
-  if (!amount) return '—'
+  if (!amount) return '-'
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -38,7 +37,7 @@ export function formatARS(amount) {
 }
 
 export function formatUSD(amount) {
-  if (!amount) return '—'
+  if (!amount) return '-'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

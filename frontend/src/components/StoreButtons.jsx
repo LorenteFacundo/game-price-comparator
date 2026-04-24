@@ -11,7 +11,7 @@ const STORES = [
     color: '#1a1a2e',
     accent: '#e94560',
     icon: '⚡',
-    search: (q) => `https://www.instant-gaming.com/es/busqueda/?q=${encodeURIComponent(q)}`,
+    search: (q) => `https://www.instant-gaming.com/en/search/?query=${encodeURIComponent(q)}`,
   },
   {
     name: 'Eneba',

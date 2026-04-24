@@ -43,6 +43,12 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	steamMode := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("steam_mode")))
+	steamCountry := "AR"
+	if steamMode == "global" {
+		steamCountry = "US"
+	}
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -70,7 +76,7 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer wg.Done()
-		p, _ := h.steam.GetPriceByTitle(query)
+		p, _ := h.steam.GetPriceByTitle(query, steamCountry)
 		mu.Lock()
 		steamPrice = p
 		mu.Unlock()
@@ -101,14 +107,14 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 				Discount:   steamPrice.Discount,
 				URL:        steamPrice.URL,
 				OnSale:     steamPrice.Discount > 0,
-				IsRegional: true,
+				IsRegional: steamCountry == "AR",
 			}
 			main.Prices = append([]models.StorePrice{steamStore}, main.Prices...)
 		}
 
 		main.Prices = append(main.Prices, models.StorePrice{
 			StoreName: "Instant Gaming",
-			URL:       fmt.Sprintf("https://www.instant-gaming.com/es/busqueda/?q=%s", url.QueryEscape(query)),
+			URL:       fmt.Sprintf("https://www.instant-gaming.com/en/search/?query=%s", url.QueryEscape(query)),
 		})
 
 		main.Prices = append(main.Prices, models.StorePrice{
