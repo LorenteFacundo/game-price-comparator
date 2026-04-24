@@ -54,9 +54,8 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	var itadResults []models.GameResult
 	var usdRate float64
-	var steamPrice *services.SteamPrice
 
-	wg.Add(3)
+	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
@@ -74,20 +73,13 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		mu.Unlock()
 	}()
 
-	go func() {
-		defer wg.Done()
-		p, _ := h.steam.GetPriceByTitle(query, steamCountry)
-		mu.Lock()
-		steamPrice = p
-		mu.Unlock()
-	}()
-
 	wg.Wait()
 
 	var finalResults []models.GameResult
 
 	if len(itadResults) > 0 {
 		main := itadResults[0]
+		steamPrice, _ := h.steam.GetPriceByTitle(main.Title, steamCountry)
 
 		filtered := []models.StorePrice{}
 		for _, p := range main.Prices {
