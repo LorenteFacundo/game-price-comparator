@@ -60,7 +60,7 @@ func (s *SteamService) GetPriceByAppID(appID, country string) (*SteamPrice, erro
 	}
 
 	endpoint := fmt.Sprintf(
-		"https://store.steampowered.com/api/appdetails?appids=%s&country=%s&filters=price_overview",
+		"https://store.steampowered.com/api/appdetails?appids=%s&country=%s",
 		appID,
 		url.QueryEscape(strings.ToUpper(country)),
 	)
