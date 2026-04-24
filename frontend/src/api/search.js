@@ -15,6 +15,19 @@ export function toARS(priceUSD, usdRate) {
   return priceUSD * usdRate
 }
 
+export function getDisplayPrice(price, showARS, usdRate) {
+  if (!price) return null
+
+  if (showARS) {
+    if (price.price_ars > 0) return price.price_ars
+    return toARS(price.price_usd, usdRate)
+  }
+
+  if (price.price_usd > 0) return price.price_usd
+  if (price.price_ars > 0 && usdRate > 0) return price.price_ars / usdRate
+  return null
+}
+
 export function formatARS(amount) {
   if (!amount) return '—'
   return new Intl.NumberFormat('es-AR', {

@@ -1,5 +1,5 @@
 import PriceRow from './PriceRow'
-import { formatARS, formatUSD, toARS } from '../api/search'
+import { formatARS, formatUSD, getDisplayPrice } from '../api/search'
 
 export default function GameCard({ game, usdRate, showARS }) {
   if (!game.prices || game.prices.length === 0) {
@@ -19,9 +19,8 @@ export default function GameCard({ game, usdRate, showARS }) {
     )
   }
 
-const bestPrice = showARS
-  ? formatARS(toARS(game.best_deal?.price_usd, usdRate))
-  : formatUSD(game.best_deal?.price_usd)
+  const bestAmount = getDisplayPrice(game.best_deal, showARS, usdRate)
+  const bestPrice = showARS ? formatARS(bestAmount) : formatUSD(bestAmount)
 
   return (
     <div style={{
@@ -49,7 +48,7 @@ const bestPrice = showARS
             {game.title}
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--muted)' }}>
-            Desde {bestPrice} · {game.prices.length} tienda{game.prices.length !== 1 ? 's' : ''}
+            Desde {bestPrice} - {game.prices.length} tienda{game.prices.length !== 1 ? 's' : ''}
           </p>
         </div>
       </div>
@@ -66,7 +65,10 @@ const bestPrice = showARS
             price={price}
             usdRate={usdRate}
             showARS={showARS}
-            isBest={i === 0}
+            isBest={
+              game.best_deal?.store_name === price.store_name &&
+              game.best_deal?.url === price.url
+            }
           />
         ))}
       </div>

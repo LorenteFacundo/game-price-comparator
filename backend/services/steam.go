@@ -14,8 +14,11 @@ type SteamService struct {
 }
 
 type SteamPrice struct {
-	PriceARS   float64 // Precio en ARS (endpoint country=AR)
-	RegularARS float64 // Precio regular en ARS
+	Currency   string
+	PriceARS   float64
+	RegularARS float64
+	PriceUSD   float64
+	RegularUSD float64
 	Discount   int
 	URL        string
 	Found      bool
@@ -79,13 +82,23 @@ func (s *SteamService) GetPriceByAppID(appID string) (*SteamPrice, error) {
 	}
 
 	// El endpoint country=AR devuelve precios en ARS (centavos → pesos)
-	return &SteamPrice{
-		PriceARS:   float64(po.Final) / 100.0,
-		RegularARS: float64(po.Initial) / 100.0,
-		Discount:   po.DiscountPercent,
-		URL:        fmt.Sprintf("https://store.steampowered.com/app/%s/", appID),
-		Found:      true,
-	}, nil
+	price := &SteamPrice{
+		Currency: strings.ToUpper(po.Currency),
+		Discount: po.DiscountPercent,
+		URL:      fmt.Sprintf("https://store.steampowered.com/app/%s/", appID),
+		Found:    true,
+	}
+
+	switch price.Currency {
+	case "ARS":
+		price.PriceARS = float64(po.Final) / 100.0
+		price.RegularARS = float64(po.Initial) / 100.0
+	default:
+		price.PriceUSD = float64(po.Final) / 100.0
+		price.RegularUSD = float64(po.Initial) / 100.0
+	}
+
+	return price, nil
 }
 
 // searchAppID busca el appid de Steam por título usando la búsqueda de Steam

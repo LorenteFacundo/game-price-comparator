@@ -33,7 +33,7 @@ const STORES = [
     accent: '#ff4444',
     icon: '⚠️',
     warning: 'Vende acceso a cuentas compartidas, no el juego en tu cuenta. Usá bajo tu propio riesgo.',
-    search: (q) => `https://mundosteam.com/`,
+    search: (q) => `https://mundosteam.com/buscar?q=${encodeURIComponent(q)}`,
   },
 ]
 
