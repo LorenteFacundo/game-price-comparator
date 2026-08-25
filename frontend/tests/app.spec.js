@@ -14,7 +14,7 @@ const results = {
   }],
 }
 
-const deals = { deals: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Steam', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.steampowered.com/', is_near_low: true }] }
+const deals = { deals: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', is_near_low: true, popularity_rank: 3, matched_stores: ['Steam', 'Epic Games Store'] }] }
 
 async function mockAPI(page) {
   await page.route('**/api/deals**', (route) => route.fulfill({ json: deals }))
@@ -28,6 +28,14 @@ test('search is shareable and shows only the real regional Steam price', async (
   await expect(page.getByText('$\u00a08.799').first()).toBeVisible()
   await expect(page.getByText('regional · ARS')).toBeVisible()
   await expect(page.getByText('GOG', { exact: true })).toBeVisible()
+})
+
+test('popular offers identify the Steam rank and matched stores', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Populares en oferta' })).toBeVisible()
+  await expect(page.getByText('#3 en Steam')).toBeVisible()
+  await expect(page.getByText('Epic Games Store · 2 tiendas')).toBeVisible()
 })
 
 test('mobile layout has no horizontal overflow', async ({ page }) => {

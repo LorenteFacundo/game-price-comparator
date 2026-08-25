@@ -19,6 +19,13 @@ type SteamPrice struct {
 	URL      string
 	Found    bool
 }
+
+type SteamTopSeller struct {
+	AppID string
+	Title string
+	Image string
+	Rank  int
+}
 type steamResponse map[string]struct {
 	Success bool `json:"success"`
 	Data    struct {
@@ -40,6 +47,55 @@ func (s *SteamService) GetPriceByTitle(ctx context.Context, title, country strin
 		return &SteamPrice{Found: false}, err
 	}
 	return s.GetPriceByAppID(ctx, appID, country)
+}
+
+func (s *SteamService) GetTopSellers(ctx context.Context, limit int) ([]SteamTopSeller, error) {
+	if limit < 1 {
+		limit = 24
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://store.steampowered.com/api/featuredcategories?cc=AR&l=spanish", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("consultando populares de Steam: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("populares de Steam respondió con status %d", resp.StatusCode)
+	}
+	var payload struct {
+		TopSellers struct {
+			Items []struct {
+				ID         int    `json:"id"`
+				Type       int    `json:"type"`
+				Name       string `json:"name"`
+				Discounted bool   `json:"discounted"`
+				Image      string `json:"header_image"`
+			} `json:"items"`
+		} `json:"top_sellers"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("parseando populares de Steam: %w", err)
+	}
+
+	popular := make([]SteamTopSeller, 0, limit)
+	seen := make(map[int]struct{})
+	for _, item := range payload.TopSellers.Items {
+		if item.ID == 0 || item.Name == "" || item.Type != 0 || !item.Discounted {
+			continue
+		}
+		if _, ok := seen[item.ID]; ok {
+			continue
+		}
+		seen[item.ID] = struct{}{}
+		popular = append(popular, SteamTopSeller{AppID: fmt.Sprintf("%d", item.ID), Title: item.Name, Image: item.Image, Rank: len(popular) + 1})
+		if len(popular) == limit {
+			break
+		}
+	}
+	return popular, nil
 }
 func (s *SteamService) GetPriceByAppID(ctx context.Context, appID, country string) (*SteamPrice, error) {
 	if country == "" {

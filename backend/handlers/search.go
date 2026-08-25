@@ -121,12 +121,22 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
-	deals, err := h.itad.GetDeals(r.Context(), limit)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
-		return
+	popular, popularErr := h.steam.GetTopSellers(r.Context(), 12)
+	deals := []models.FeaturedDeal{}
+	var err error
+	if popularErr == nil {
+		deals, err = h.itad.GetRadarDeals(r.Context(), popular, limit)
 	}
 	response := models.DealsResponse{Deals: deals}
+	if popularErr != nil || err != nil || len(deals) == 0 {
+		deals, err = h.itad.GetDeals(r.Context(), limit)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
+			return
+		}
+		response.Deals = deals
+		response.Warnings = append(response.Warnings, "Mostramos ofertas destacadas mientras se actualiza el radar de populares.")
+	}
 	h.storeDeals(limit, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, response)

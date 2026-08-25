@@ -103,7 +103,7 @@ export default function App() {
         {search.warnings.map((warning) => <div className="notice" role="status" aria-live="polite" key={warning}>{warning}</div>)}
 
         {!search.results.length && !loading && <section className="deals-section" aria-labelledby="deals-title">
-          <div className="section-heading"><h2 id="deals-title">Ofertas</h2></div>
+          <div className="section-heading"><h2 id="deals-title">Populares en oferta</h2></div>
           {dealsLoading ? <div className="deal-grid" aria-label="Cargando ofertas">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : deals.length ? <div className="deal-grid">{deals.map((deal) => <DealCard key={deal.id} deal={deal} onSearch={runSearch} />)}</div> : <div className="empty-panel"><h2>Sin ofertas por ahora.</h2></div>}
         </section>}
 

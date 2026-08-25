@@ -64,6 +64,7 @@ fieldset { min-width: 0; padding: 0; border: 0; }
 .deal-title:hover { color: #cdfc53; }
 .deal-price-line { display: flex; flex-wrap: wrap; gap: .45rem; align-items: baseline; }
 .deal-price-line strong { font-size: 1.05rem; }.deal-price-line del, .row-price del { color: #8e9188; font-size: .7rem; }.discount { color: #ffae86; font: 500 .68rem 'DM Mono', monospace; }
+.deal-match { display: block; margin-top: .55rem; color: #91958b; font: 500 .58rem 'DM Mono', monospace; text-transform: uppercase; }
 .deal-skeleton { height: 14rem; border-radius: .85rem; background: linear-gradient(100deg, #1d201a 15%, #2a2e25 40%, #1d201a 65%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 .notice { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; margin-top: 1.4rem; border-left: 2px solid #cdfc53; padding: .85rem 1rem; color: #caccbf; background: rgba(205, 252, 83, .07); font-size: .84rem; }.notice-error { border-color: #ff884e; background: rgba(255, 136, 78, .08); }.notice button { border: 0; border-bottom: 1px solid currentColor; padding: 0; color: #f7f4ea; background: transparent; font-weight: 700; }

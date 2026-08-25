@@ -36,6 +36,8 @@ type FeaturedDeal struct {
 	ExpiresAt  string  `json:"expires_at,omitempty"`
 	HistoryLow float64 `json:"history_low,omitempty"`
 	IsNearLow  bool    `json:"is_near_low"`
+	PopularityRank int      `json:"popularity_rank,omitempty"`
+	MatchedStores  []string `json:"matched_stores,omitempty"`
 }
 
 type SearchResponse struct {
