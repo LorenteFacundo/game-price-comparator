@@ -16,6 +16,12 @@ import (
 
 const itadBaseURL = "https://api.isthereanydeal.com"
 
+var featuredStores = map[string]struct{}{
+	"steam":            {},
+	"epic games store": {},
+	"microsoft store":  {},
+}
+
 type ITADService struct {
 	apiKey string
 	client *http.Client
@@ -103,7 +109,9 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 	if limit > 24 {
 		limit = 24
 	}
-	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=%d&sort=-cut", itadBaseURL, limit), nil)
+	// Pedimos más candidatos porque luego conservamos solamente tiendas de juegos
+	// que el usuario puede abrir y comprar directamente desde Argentina.
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=24&sort=-cut", itadBaseURL), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +121,9 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 	}
 	deals := make([]models.FeaturedDeal, 0, len(response.List))
 	for _, item := range response.List {
+		if !isFeaturedStore(item.Deal.Shop.Name) {
+			continue
+		}
 		image := item.Assets.Banner300
 		if image == "" {
 			image = item.Assets.BoxArt
@@ -126,6 +137,9 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 			deal.IsNearLow = item.Deal.Price.Amount <= item.Deal.HistoryLow.Amount*1.03
 		}
 		deals = append(deals, deal)
+		if len(deals) == limit {
+			break
+		}
 	}
 	return deals, nil
 }
@@ -178,5 +192,11 @@ func (s *ITADService) doJSON(req *http.Request, target any) error {
 	return json.NewDecoder(resp.Body).Decode(target)
 }
 func storePriceFromDeal(deal itadDeal) models.StorePrice {
-	return models.StorePrice{StoreName: deal.Shop.Name, Price: deal.Price.Amount, Regular: deal.Regular.Amount, Currency: strings.ToUpper(deal.Price.Currency), Discount: deal.Cut, URL: deal.URL, OnSale: deal.Cut > 0}
+	currency := strings.ToUpper(deal.Price.Currency)
+	return models.StorePrice{StoreName: deal.Shop.Name, Price: deal.Price.Amount, Regular: deal.Regular.Amount, Currency: currency, Discount: deal.Cut, URL: deal.URL, OnSale: deal.Cut > 0, IsRegional: strings.EqualFold(deal.Shop.Name, "Steam") && currency == "ARS"}
+}
+
+func isFeaturedStore(storeName string) bool {
+	_, ok := featuredStores[strings.ToLower(strings.TrimSpace(storeName))]
+	return ok
 }

@@ -72,3 +72,33 @@ fieldset { min-width: 0; padding: 0; border: 0; }
 @media (max-width: 900px) { .deal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.search-panel::after { font-size: 13rem; }.app-shell { padding-inline: 1rem; }.game-card { grid-template-columns: 9rem minmax(0, 1fr); } }
 @media (max-width: 620px) { .app-shell { padding-inline: .85rem; }.topbar { min-height: 4.5rem; }.topbar-meta { display: none; } main { padding-top: 2.25rem; }.search-panel { padding: 1.5rem 1rem; border-radius: 1rem; }.search-panel::after { right: -1rem; top: -1rem; font-size: 9rem; }.search-copy { min-width: 0; }.search-copy h1 { font-size: 2.9rem; }.search-copy p { max-width: 100%; margin-top: 1rem; font-size: .9rem; overflow-wrap: anywhere; }.search-controls { grid-template-columns: 1fr; gap: .7rem; margin-top: 2rem; }.search-button { width: 100%; }.search-options { gap: .9rem; }.segmented-control button { padding-inline: .55rem; }.trust-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; font-size: .52rem; }.trust-strip span { overflow-wrap: anywhere; }.section-heading { align-items: start; flex-direction: column; margin-bottom: 1rem; }.section-heading h2 { overflow-wrap: anywhere; font-size: 2.05rem; }.heading-note { font-size: .56rem; }.deal-grid { gap: .7rem; }.deal-image-link { height: 6.5rem; }.deal-content { padding: .75rem; }.deal-title { margin: .6rem 0; font-size: .82rem; }.deal-price-line strong { font-size: .85rem; }.low-badge { display: none; }.game-card { grid-template-columns: 1fr; }.game-cover { height: 9rem; min-height: 0; }.game-main { padding: 1rem; }.price-list { padding: .65rem; }.price-row { grid-template-columns: minmax(0, 1fr) auto; gap: .65rem; }.row-price { align-items: end; }.store-link { grid-column: 1 / -1; justify-self: start; }.site-footer { grid-template-columns: 1fr; gap: .6rem; margin-top: 5rem; }.site-footer p { order: 3; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+/* Modo utilidad: la pantalla prioriza juego, tienda y precio. */
+main { padding-top: clamp(1.5rem, 4vw, 3rem); }
+.topbar { min-height: 4.5rem; }
+.search-panel { padding: clamp(1.25rem, 3vw, 2rem); border-radius: 1rem; box-shadow: none; }
+.search-panel::after { display: none; }
+.search-copy h1 { max-width: none; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1; }
+.search-controls { margin-top: 1.25rem; }
+.search-options { margin-top: .9rem; }
+.deals-section, .results-section, .favorites-section { margin-top: clamp(2.25rem, 5vw, 4rem); }
+.section-heading { margin-bottom: .9rem; }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.25rem); line-height: 1; }
+.deal-image-link { height: 7rem; }
+.deal-content { padding: .8rem; }
+.deal-title { margin: .55rem 0 .7rem; }
+.game-main { padding: 1rem; }
+.best-summary { margin-top: .7rem; }
+.best-summary strong { font-family: 'Manrope', sans-serif; font-size: 1.6rem; font-weight: 800; letter-spacing: -.06em; }
+.show-prices { margin-top: .85rem; }
+.site-footer { grid-template-columns: 1fr auto; margin-top: 4rem; }
+.site-footer p { display: none; }
+@media (max-width: 620px) {
+  main { padding-top: 1.25rem; }
+  .search-panel { padding: 1rem; }
+  .search-copy h1 { font-size: 2rem; }
+  .search-controls { margin-top: 1rem; }
+  .search-options { gap: .65rem 1rem; }
+  .section-heading h2 { font-size: 1.5rem; }
+  .site-footer { grid-template-columns: 1fr auto; margin-top: 3rem; }
+}

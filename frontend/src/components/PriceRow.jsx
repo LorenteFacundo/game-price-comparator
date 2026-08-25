@@ -9,7 +9,7 @@ export default function PriceRow({ price, preferredCurrency, usdRate, isBest }) 
         <span className="store-dot" aria-hidden="true" />
         <div>
           <strong>{price.store_name}</strong>
-          <span>{price.is_regional ? 'precio regional' : price.currency}</span>
+          <span>{price.is_regional ? 'regional · ARS' : price.currency}</span>
         </div>
       </div>
       <div className="row-price">

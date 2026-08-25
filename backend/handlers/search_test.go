@@ -43,3 +43,16 @@ func TestSortPricesAndPickBestDoesNotCompareUnknownCurrenciesAsARS(t *testing.T)
 		t.Fatalf("expected Steam to be the only comparable offer, got %+v", best)
 	}
 }
+
+func TestWithoutStoreRemovesEverySteamPrice(t *testing.T) {
+	prices := []models.StorePrice{
+		{StoreName: "Steam", Currency: "ARS", Price: 7549},
+		{StoreName: "Epic Games Store", Currency: "ARS", Price: 7549},
+		{StoreName: "steam", Currency: "USD", Price: 24.99},
+	}
+
+	filtered := withoutStore(prices, "Steam")
+	if len(filtered) != 1 || filtered[0].StoreName != "Epic Games Store" {
+		t.Fatalf("expected only Epic Games Store after removing Steam, got %+v", filtered)
+	}
+}

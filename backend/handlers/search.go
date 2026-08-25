@@ -76,17 +76,16 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		response.Warnings = append(response.Warnings, "No se pudo actualizar la conversión USD/ARS; mostramos la moneda original.")
 	}
 	for index := range response.Results {
-		if index == 0 {
-			country := "AR"
-			if steamMode == "global" {
-				country = "US"
-			}
-			steamPrice, steamErr := h.steam.GetPriceByTitle(r.Context(), response.Results[index].Title, country)
+		// ITAD ya consulta Argentina y entrega la cotización regional de Steam en ARS.
+		// Sólo consultamos Steam de forma directa cuando se pidió explícitamente el precio global.
+		if index == 0 && steamMode == "global" {
+			response.Results[index].Prices = withoutStore(response.Results[index].Prices, "Steam")
+			steamPrice, steamErr := h.steam.GetPriceByTitle(r.Context(), response.Results[index].Title, "US")
 			if steamErr != nil {
-				response.Warnings = append(response.Warnings, "Steam no respondió para el primer resultado; el resto de tiendas sigue disponible.")
+				response.Warnings = append(response.Warnings, "No pudimos cargar Steam global.")
 			}
 			if steamPrice != nil && steamPrice.Found {
-				response.Results[index].Prices = append(response.Results[index].Prices, models.StorePrice{StoreName: "Steam", Price: steamPrice.Price, Regular: steamPrice.Regular, Currency: steamPrice.Currency, Discount: steamPrice.Discount, URL: steamPrice.URL, OnSale: steamPrice.Discount > 0, IsRegional: country == "AR"})
+				response.Results[index].Prices = append(response.Results[index].Prices, models.StorePrice{StoreName: "Steam", Price: steamPrice.Price, Regular: steamPrice.Regular, Currency: steamPrice.Currency, Discount: steamPrice.Discount, URL: steamPrice.URL, OnSale: steamPrice.Discount > 0})
 			}
 		}
 		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(response.Results[index].Prices, response.USDRate)
@@ -94,6 +93,16 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	h.storeSearch(cacheKey, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, response)
+}
+
+func withoutStore(prices []models.StorePrice, storeName string) []models.StorePrice {
+	filtered := make([]models.StorePrice, 0, len(prices))
+	for _, price := range prices {
+		if !strings.EqualFold(price.StoreName, storeName) {
+			filtered = append(filtered, price)
+		}
+	}
+	return filtered
 }
 func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

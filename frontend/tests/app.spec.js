@@ -21,11 +21,12 @@ async function mockAPI(page) {
   await page.route('**/api/search**', (route) => route.fulfill({ json: results }))
 }
 
-test('search is shareable and displays correctly converted offers', async ({ page }) => {
+test('search is shareable and shows only the real regional Steam price', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/?q=Hades&steam=regional')
-  await expect(page.getByRole('heading', { name: /coincidencias para “hades”/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Hades', exact: true })).toBeVisible()
   await expect(page.getByText('$\u00a08.799').first()).toBeVisible()
+  await expect(page.getByText('regional · ARS')).toBeVisible()
   await expect(page.getByText('GOG', { exact: true })).toBeVisible()
 })
 
@@ -33,6 +34,6 @@ test('mobile layout has no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAPI(page)
   await page.goto('/?q=Hades')
-  await expect(page.getByRole('heading', { name: /coincidencias para “hades”/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Hades', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
 })

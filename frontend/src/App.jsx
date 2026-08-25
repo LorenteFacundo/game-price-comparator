@@ -91,7 +91,7 @@ export default function App() {
       <a className="skip-link" href="#content">Saltar al contenido</a>
       <header className="topbar">
         <a className="brand" href="/" aria-label="PricePulse, inicio"><span aria-hidden="true">◐</span> PricePulse</a>
-        <div className="topbar-meta"><span>Precios reales</span><span aria-hidden="true">·</span><span>ARS primero</span></div>
+        <div className="topbar-meta">Steam · Epic · Microsoft</div>
       </header>
 
       <main id="content">
@@ -99,26 +99,22 @@ export default function App() {
 
         {history.length > 0 && !search.results.length && <section className="recent-searches" aria-label="Búsquedas recientes"><span>Volver a buscar:</span>{history.map((item) => <button type="button" key={item} onClick={() => runSearch(item)}>{item}</button>)}</section>}
 
-        <section className="trust-strip" aria-label="Cómo mostramos las ofertas">
-          <span><b>01</b> Moneda original</span><span><b>02</b> Tiendas verificadas</span><span><b>03</b> Sin cuentas compartidas</span>
-        </section>
-
-        {error && <div className="notice notice-error" role="alert"><strong>No salió como esperábamos.</strong><span>{error}</span><button type="button" onClick={() => runSearch(query)}>Reintentar</button></div>}
+        {error && <div className="notice notice-error" role="alert"><span>{error}</span><button type="button" onClick={() => runSearch(query)}>Reintentar</button></div>}
         {search.warnings.map((warning) => <div className="notice" role="status" aria-live="polite" key={warning}>{warning}</div>)}
 
         {!search.results.length && !loading && <section className="deals-section" aria-labelledby="deals-title">
-          <div className="section-heading"><div><span className="eyebrow">Señal de hoy</span><h2 id="deals-title">Ofertas que vale la pena mirar.</h2></div><span className="heading-note">Datos actualizados al consultar</span></div>
-          {dealsLoading ? <div className="deal-grid" aria-label="Cargando ofertas">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : deals.length ? <div className="deal-grid">{deals.map((deal) => <DealCard key={deal.id} deal={deal} onSearch={runSearch} />)}</div> : <div className="empty-panel"><span aria-hidden="true">⌁</span><h2>Las ofertas vuelven enseguida.</h2><p>Mientras tanto, buscá cualquier juego para comparar sus tiendas.</p></div>}
+          <div className="section-heading"><h2 id="deals-title">Ofertas</h2></div>
+          {dealsLoading ? <div className="deal-grid" aria-label="Cargando ofertas">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : deals.length ? <div className="deal-grid">{deals.map((deal) => <DealCard key={deal.id} deal={deal} onSearch={runSearch} />)}</div> : <div className="empty-panel"><h2>Sin ofertas por ahora.</h2></div>}
         </section>}
 
-        {loading && <div className="search-loading" role="status" aria-live="polite"><span className="pulse-dot" /><span>Revisando tiendas y precios…</span></div>}
+        {loading && <div className="search-loading" role="status" aria-live="polite"><span className="pulse-dot" /><span>Buscando precios…</span></div>}
 
         {search.results.length > 0 && !loading && <section className="results-section" aria-labelledby="results-title">
-          <div className="section-heading"><div><span className="eyebrow">Resultado de búsqueda</span><h2 id="results-title">Coincidencias para “{query}”</h2></div><span className="heading-note">{search.results.length} juego{search.results.length !== 1 ? 's' : ''}</span></div>
+          <div className="section-heading"><h2 id="results-title">{query}</h2><span className="heading-note">{search.results.length} juego{search.results.length !== 1 ? 's' : ''}</span></div>
           <div className="results-grid">{search.results.map((game) => <GameCard key={game.id} game={game} currency={currency} usdRate={search.usdRate} isFavorite={favoriteIds.has(game.id)} onToggleFavorite={toggleFavorite} />)}</div>
         </section>}
 
-        {favorites.length > 0 && !search.results.length && <section className="favorites-section" aria-labelledby="favorites-title"><div className="section-heading"><div><span className="eyebrow">Tu radar</span><h2 id="favorites-title">Favoritos guardados</h2></div><span className="heading-note">en este dispositivo</span></div><div className="favorite-list">{favorites.slice(0, 6).map((game) => <button key={game.id} type="button" onClick={() => runSearch(game.title)}><span>★</span>{game.title}<i aria-hidden="true">↗</i></button>)}</div></section>}
+        {favorites.length > 0 && !search.results.length && <section className="favorites-section" aria-labelledby="favorites-title"><div className="section-heading"><h2 id="favorites-title">Favoritos</h2></div><div className="favorite-list">{favorites.slice(0, 6).map((game) => <button key={game.id} type="button" onClick={() => runSearch(game.title)}><span>★</span>{game.title}<i aria-hidden="true">↗</i></button>)}</div></section>}
       </main>
       <Footer />
     </div>
