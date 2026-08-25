@@ -1,58 +1,43 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/joho/godotenv"
-	"github.com/rs/cors"
+	"time"
 
 	"game-price-comparator/handlers"
 	"game-price-comparator/services"
+	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No se encontró .env, usando variables de entorno del sistema")
+		log.Println("No se encontró .env; usando variables de entorno del sistema")
 	}
-
 	apiKey := os.Getenv("ITAD_API_KEY")
 	if apiKey == "" {
 		log.Fatal("ITAD_API_KEY no está configurada")
 	}
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
-	itadSvc := services.NewITADService(apiKey)
-	currencySvc := services.NewCurrencyService()
-	steamSvc := services.NewSteamService()
-	scraperSvc := services.NewScraperService()
-	searchHandler := handlers.NewSearchHandler(itadSvc, currencySvc, steamSvc, scraperSvc)
-
+	searchHandler := handlers.NewSearchHandler(services.NewITADService(apiKey), services.NewCurrencyService(), services.NewSteamService())
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/search", searchHandler.Handle)
+	mux.HandleFunc("/api/deals", searchHandler.HandleDeals)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok"}`))
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-
-	frontendURL := os.Getenv("FRONTEND_URL")
 	allowedOrigins := []string{"http://localhost:5173", "http://localhost:3000"}
-
-	if frontendURL != "" {
+	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
 		allowedOrigins = append(allowedOrigins, frontendURL)
 	}
-
-	// CORS para que el frontend React pueda conectarse
-	handler := cors.New(cors.Options{
-		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"GET"},
-	}).Handler(mux)
-
-	fmt.Printf("Backend corriendo en http://localhost:%s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, handler))
+	handler := cors.New(cors.Options{AllowedOrigins: allowedOrigins, AllowedMethods: []string{http.MethodGet}, AllowedHeaders: []string{"Content-Type"}, MaxAge: 600}).Handler(mux)
+	server := &http.Server{Addr: ":" + port, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+	log.Printf("API escuchando en http://localhost:%s", port)
+	log.Fatal(server.ListenAndServe())
 }

@@ -2,183 +2,181 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"sort"
+	"strings"
 	"time"
 
 	"game-price-comparator/models"
 )
 
+const itadBaseURL = "https://api.isthereanydeal.com"
+
 type ITADService struct {
 	apiKey string
 	client *http.Client
 }
-
-type itadSearchResult struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Type   string `json:"type"`
-	Assets struct {
-		BoxArt    string `json:"boxart"`
-		Banner300 string `json:"banner300"`
-	} `json:"assets"`
+type itadMoney struct {
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
 }
-
+type itadAssets struct {
+	BoxArt    string `json:"boxart"`
+	Banner300 string `json:"banner300"`
+}
+type itadSearchResult struct {
+	ID     string     `json:"id"`
+	Title  string     `json:"title"`
+	Assets itadAssets `json:"assets"`
+}
+type itadDeal struct {
+	Shop struct {
+		Name string `json:"name"`
+	} `json:"shop"`
+	Price      itadMoney  `json:"price"`
+	Regular    itadMoney  `json:"regular"`
+	Cut        int        `json:"cut"`
+	URL        string     `json:"url"`
+	HistoryLow *itadMoney `json:"historyLow"`
+	Expiry     *string    `json:"expiry"`
+}
 type itadPriceResult struct {
-	ID    string `json:"id"`
-	Deals []struct {
-		Shop struct {
-			Name string `json:"name"`
-		} `json:"shop"`
-		Price struct {
-			Amount float64 `json:"amount"`
-		} `json:"price"`
-		Regular struct {
-			Amount float64 `json:"amount"`
-		} `json:"regular"`
-		Cut int    `json:"cut"`
-		URL string `json:"url"`
-	} `json:"deals"`
+	ID    string     `json:"id"`
+	Deals []itadDeal `json:"deals"`
+}
+type itadDealsResponse struct {
+	List []struct {
+		ID     string     `json:"id"`
+		Title  string     `json:"title"`
+		Assets itadAssets `json:"assets"`
+		Deal   itadDeal   `json:"deal"`
+	} `json:"list"`
 }
 
 func NewITADService(apiKey string) *ITADService {
-	return &ITADService{
-		apiKey: apiKey,
-		client: &http.Client{Timeout: 10 * time.Second},
-	}
+	return &ITADService{apiKey: apiKey, client: &http.Client{Timeout: 12 * time.Second}}
 }
 
-func (s *ITADService) Search(query string) ([]models.GameResult, error) {
-	games, err := s.searchGames(query)
+func (s *ITADService) Search(ctx context.Context, query string) ([]models.GameResult, error) {
+	games, err := s.searchGames(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	if len(games) == 0 {
 		return []models.GameResult{}, nil
 	}
-
-	// Tomamos los primeros 5 resultados
-	if len(games) > 5 {
-		games = games[:5]
-	}
-
 	ids := make([]string, len(games))
-	for i, g := range games {
-		ids[i] = g.ID
+	for i, game := range games {
+		ids[i] = game.ID
 	}
-
-	prices, err := s.getPrices(ids)
+	prices, err := s.getPrices(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-
-	// Mapeamos precios por ID de juego
-	priceMap := make(map[string][]models.StorePrice)
-	for _, p := range prices {
-		var storePrices []models.StorePrice
-		for _, deal := range p.Deals {
-			sp := models.StorePrice{
-				StoreName:  deal.Shop.Name,
-				PriceARS:   deal.Price.Amount,
-				RegularARS: deal.Regular.Amount,
-				Discount:   deal.Cut,
-				URL:        deal.URL,
-				OnSale:     deal.Cut > 0,
-			}
-			storePrices = append(storePrices, sp)
+	priceMap := make(map[string][]models.StorePrice, len(prices))
+	for _, result := range prices {
+		storePrices := make([]models.StorePrice, 0, len(result.Deals))
+		for _, deal := range result.Deals {
+			storePrices = append(storePrices, storePriceFromDeal(deal))
 		}
-		// Ordenamos de menor a mayor precio
-		sort.Slice(storePrices, func(i, j int) bool {
-			return storePrices[i].PriceARS < storePrices[j].PriceARS
-		})
-		priceMap[p.ID] = storePrices
+		priceMap[result.ID] = storePrices
 	}
-
-	var results []models.GameResult
-	for _, g := range games {
-		image := g.Assets.Banner300
+	results := make([]models.GameResult, 0, len(games))
+	for _, game := range games {
+		image := game.Assets.Banner300
 		if image == "" {
-			image = g.Assets.BoxArt
+			image = game.Assets.BoxArt
 		}
-
-		storePrices := priceMap[g.ID]
-		result := models.GameResult{
-			ID:       g.ID,
-			Title:    g.Title,
-			ImageURL: image,
-			Prices:   storePrices,
-		}
-		if len(storePrices) > 0 {
-			best := storePrices[0]
-			result.BestDeal = &best
-		}
-		results = append(results, result)
+		results = append(results, models.GameResult{ID: game.ID, Title: game.Title, ImageURL: image, Prices: priceMap[game.ID]})
 	}
-
 	return results, nil
 }
 
-func (s *ITADService) searchGames(query string) ([]itadSearchResult, error) {
-	endpoint := fmt.Sprintf(
-		"https://api.isthereanydeal.com/games/search/v1?title=%s&results=5&key=%s",
-		url.QueryEscape(query), s.apiKey,
-	)
-	req, err := http.NewRequest("GET", endpoint, nil)
+func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.FeaturedDeal, error) {
+	if limit < 1 {
+		limit = 12
+	}
+	if limit > 24 {
+		limit = 24
+	}
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=%d&sort=-cut", itadBaseURL, limit), nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	var response itadDealsResponse
+	if err := s.doJSON(req, &response); err != nil {
+		return nil, err
+	}
+	deals := make([]models.FeaturedDeal, 0, len(response.List))
+	for _, item := range response.List {
+		image := item.Assets.Banner300
+		if image == "" {
+			image = item.Assets.BoxArt
+		}
+		deal := models.FeaturedDeal{ID: item.ID, Title: item.Title, ImageURL: image, StoreName: item.Deal.Shop.Name, Price: item.Deal.Price.Amount, Regular: item.Deal.Regular.Amount, Currency: strings.ToUpper(item.Deal.Price.Currency), Discount: item.Deal.Cut, URL: item.Deal.URL}
+		if item.Deal.Expiry != nil {
+			deal.ExpiresAt = *item.Deal.Expiry
+		}
+		if item.Deal.HistoryLow != nil && strings.EqualFold(item.Deal.HistoryLow.Currency, item.Deal.Price.Currency) {
+			deal.HistoryLow = item.Deal.HistoryLow.Amount
+			deal.IsNearLow = item.Deal.Price.Amount <= item.Deal.HistoryLow.Amount*1.03
+		}
+		deals = append(deals, deal)
+	}
+	return deals, nil
+}
 
-	resp, err := s.client.Do(req)
+func (s *ITADService) searchGames(ctx context.Context, query string) ([]itadSearchResult, error) {
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/games/search/v1?title=%s&results=5", itadBaseURL, url.QueryEscape(query)), nil)
 	if err != nil {
-		return nil, fmt.Errorf("error en búsqueda: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ITAD respondió con status %d", resp.StatusCode)
-	}
-
 	var results []itadSearchResult
-	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return nil, fmt.Errorf("error parseando búsqueda: %w", err)
+	if err := s.doJSON(req, &results); err != nil {
+		return nil, fmt.Errorf("búsqueda ITAD: %w", err)
 	}
 	return results, nil
 }
-
-func (s *ITADService) getPrices(ids []string) ([]itadPriceResult, error) {
+func (s *ITADService) getPrices(ctx context.Context, ids []string) ([]itadPriceResult, error) {
 	body, err := json.Marshal(ids)
 	if err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest(
-		"POST",
-		fmt.Sprintf("https://api.isthereanydeal.com/games/prices/v3?country=AR&key=%s", s.apiKey),
-		bytes.NewBuffer(body),
-	)
+	req, err := s.newRequest(ctx, http.MethodPost, itadBaseURL+"/games/prices/v3?country=AR", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error obteniendo precios: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ITAD precios respondió con status %d", resp.StatusCode)
-	}
-
 	var results []itadPriceResult
-	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return nil, fmt.Errorf("error parseando precios: %w", err)
+	if err := s.doJSON(req, &results); err != nil {
+		return nil, fmt.Errorf("precios ITAD: %w", err)
 	}
 	return results, nil
+}
+func (s *ITADService) newRequest(ctx context.Context, method, endpoint string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("ITAD-API-Key", s.apiKey)
+	return req, nil
+}
+func (s *ITADService) doJSON(req *http.Request, target any) error {
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("respondió con status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+func storePriceFromDeal(deal itadDeal) models.StorePrice {
+	return models.StorePrice{StoreName: deal.Shop.Name, Price: deal.Price.Amount, Regular: deal.Regular.Amount, Currency: strings.ToUpper(deal.Price.Currency), Discount: deal.Cut, URL: deal.URL, OnSale: deal.Cut > 0}
 }

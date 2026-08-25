@@ -1,22 +1,13 @@
 package models
 
-type ITADGame struct {
-	ID     string `json:"id"`
-	Slug   string `json:"slug"`
-	Title  string `json:"title"`
-	Type   string `json:"type"`
-	Assets struct {
-		BoxArt    string `json:"boxart"`
-		Banner300 string `json:"banner300"`
-	} `json:"assets"`
-}
-
+// StorePrice preserves the currency returned by the provider. Values are never
+// silently converted on the server: conversion is only used for comparison
+// when both ARS and USD are known.
 type StorePrice struct {
 	StoreName  string  `json:"store_name"`
-	PriceUSD   float64 `json:"price_usd"`
-	PriceARS   float64 `json:"price_ars"`
-	RegularUSD float64 `json:"regular_usd"`
-	RegularARS float64 `json:"regular_ars"`
+	Price      float64 `json:"price"`
+	Regular    float64 `json:"regular"`
+	Currency   string  `json:"currency"`
 	Discount   int     `json:"discount_percent"`
 	URL        string  `json:"url"`
 	OnSale     bool    `json:"on_sale"`
@@ -29,12 +20,34 @@ type GameResult struct {
 	Title    string       `json:"title"`
 	ImageURL string       `json:"image_url"`
 	Prices   []StorePrice `json:"prices"`
-	BestDeal *StorePrice  `json:"best_deal"`
+	BestDeal *StorePrice  `json:"best_deal,omitempty"`
+}
+
+type FeaturedDeal struct {
+	ID         string  `json:"id"`
+	Title      string  `json:"title"`
+	ImageURL   string  `json:"image_url"`
+	StoreName  string  `json:"store_name"`
+	Price      float64 `json:"price"`
+	Regular    float64 `json:"regular"`
+	Currency   string  `json:"currency"`
+	Discount   int     `json:"discount_percent"`
+	URL        string  `json:"url"`
+	ExpiresAt  string  `json:"expires_at,omitempty"`
+	HistoryLow float64 `json:"history_low,omitempty"`
+	IsNearLow  bool    `json:"is_near_low"`
 }
 
 type SearchResponse struct {
-	Query   string       `json:"query"`
-	Results []GameResult `json:"results"`
-	USDRate float64      `json:"usd_rate"`
-	Error   string       `json:"error,omitempty"`
+	Query    string       `json:"query"`
+	Results  []GameResult `json:"results"`
+	USDRate  float64      `json:"usd_rate"`
+	Warnings []string     `json:"warnings,omitempty"`
+	Error    string       `json:"error,omitempty"`
+}
+
+type DealsResponse struct {
+	Deals    []FeaturedDeal `json:"deals"`
+	Warnings []string       `json:"warnings,omitempty"`
+	Error    string         `json:"error,omitempty"`
 }

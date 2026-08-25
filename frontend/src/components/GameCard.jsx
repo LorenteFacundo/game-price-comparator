@@ -1,77 +1,28 @@
+import { useState } from 'react'
+import { displayMoney } from '../api/client'
 import PriceRow from './PriceRow'
-import { formatARS, formatUSD, getDisplayPrice } from '../api/search'
 
-export default function GameCard({ game, usdRate, showARS }) {
-  if (!game.prices || game.prices.length === 0) {
-    return (
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        padding: '20px',
-        opacity: 0.6,
-      }}>
-        <p style={{ fontSize: '16px', fontWeight: 600 }}>{game.title}</p>
-        <p style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '6px' }}>
-          Sin precios disponibles en este momento
-        </p>
-      </div>
-    )
-  }
-
-  const bestAmount = getDisplayPrice(game.best_deal, showARS, usdRate)
-  const bestPrice = showARS ? formatARS(bestAmount) : formatUSD(bestAmount)
-
+export default function GameCard({ game, currency, usdRate, isFavorite, onToggleFavorite }) {
+  const [expanded, setExpanded] = useState(true)
+  const best = displayMoney(game.best_deal, currency, usdRate)
+  const priceCount = game.prices?.filter((price) => price.price > 0).length || 0
   return (
-    <div style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      overflow: 'hidden',
-    }}>
-      <div style={{ display: 'flex', gap: '16px', padding: '16px' }}>
-        {game.image_url && (
-          <img
-            src={game.image_url}
-            alt={game.title}
-            style={{
-              width: '120px',
-              height: '56px',
-              objectFit: 'cover',
-              borderRadius: '8px',
-              flexShrink: 0,
-            }}
-          />
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>
-            {game.title}
-          </h3>
-          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>
-            Desde {bestPrice} - {game.prices.length} tienda{game.prices.length !== 1 ? 's' : ''}
-          </p>
+    <article className="game-card">
+      <div className="game-cover">
+        {game.image_url ? <img src={game.image_url} alt="" width="300" height="140" loading="lazy" /> : <div className="image-fallback" aria-hidden="true">◌</div>}
+      </div>
+      <div className="game-main">
+        <div className="game-heading">
+          <div>
+            <span className="eyebrow">{priceCount ? `${priceCount} precios comparables` : 'Sin precios comparables'}</span>
+            <h3>{game.title}</h3>
+          </div>
+          <button className={`favorite-button ${isFavorite ? 'is-saved' : ''}`} type="button" aria-label={isFavorite ? `Quitar ${game.title} de favoritos` : `Guardar ${game.title} en favoritos`} aria-pressed={isFavorite} onClick={() => onToggleFavorite(game)}>{isFavorite ? '★' : '☆'}</button>
         </div>
+        {game.best_deal ? <div className="best-summary"><span>Desde</span><strong>{best.label}</strong>{best.converted && <small>conversión estimada</small>}</div> : <p className="muted-copy">Todavía no hay una oferta comparable para este juego.</p>}
+        {game.prices?.length > 0 && <button className="show-prices" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? 'Ocultar tiendas' : `Ver ${game.prices.length} tiendas`} <span aria-hidden="true">{expanded ? '−' : '+'}</span></button>}
       </div>
-
-      <div style={{
-        padding: '0 16px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px',
-      }}>
-        {game.prices.map((price, i) => (
-          <PriceRow
-            key={i}
-            price={price}
-            usdRate={usdRate}
-            showARS={showARS}
-            isBest={
-              game.best_deal?.store_name === price.store_name &&
-              game.best_deal?.url === price.url
-            }
-          />
-        ))}
-      </div>
-    </div>
+      {expanded && game.prices?.length > 0 && <ul className="price-list">{game.prices.map((price) => <PriceRow key={`${price.store_name}-${price.url}`} price={price} preferredCurrency={currency} usdRate={usdRate} isBest={game.best_deal?.store_name === price.store_name && game.best_deal?.url === price.url} />)}</ul>}
+    </article>
   )
 }

@@ -8,8 +8,8 @@ import (
 
 func TestSortPricesAndPickBestPrefersLowestNormalizedPrice(t *testing.T) {
 	prices := []models.StorePrice{
-		{StoreName: "Steam", PriceUSD: 1.24},
-		{StoreName: "Microsoft Store", PriceARS: 359},
+		{StoreName: "Steam", Price: 1.24, Currency: "USD"},
+		{StoreName: "Microsoft Store", Price: 359, Currency: "ARS"},
 		{StoreName: "Eneba", URL: "https://example.com"},
 		{StoreName: "MundoSteam", URL: "https://example.com"},
 	}
@@ -29,5 +29,17 @@ func TestSortPricesAndPickBestPrefersLowestNormalizedPrice(t *testing.T) {
 
 	if sorted[len(sorted)-1].StoreName != "MundoSteam" {
 		t.Fatalf("expected MundoSteam last, got %s", sorted[len(sorted)-1].StoreName)
+	}
+}
+
+func TestSortPricesAndPickBestDoesNotCompareUnknownCurrenciesAsARS(t *testing.T) {
+	prices := []models.StorePrice{
+		{StoreName: "EUR Store", Price: 1, Currency: "EUR"},
+		{StoreName: "Steam", Price: 2, Currency: "USD"},
+	}
+
+	_, best := sortPricesAndPickBest(prices, 1400)
+	if best == nil || best.StoreName != "Steam" {
+		t.Fatalf("expected Steam to be the only comparable offer, got %+v", best)
 	}
 }

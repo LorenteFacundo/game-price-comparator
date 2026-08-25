@@ -4,184 +4,179 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"game-price-comparator/models"
 	"game-price-comparator/services"
 )
 
+const cacheTTL = 5 * time.Minute
+
+type cachedSearch struct {
+	response  models.SearchResponse
+	expiresAt time.Time
+}
+type cachedDeals struct {
+	response  models.DealsResponse
+	expiresAt time.Time
+}
 type SearchHandler struct {
-	itad     *services.ITADService
-	currency *services.CurrencyService
-	steam    *services.SteamService
-	scraper  *services.ScraperService
+	itad        *services.ITADService
+	currency    *services.CurrencyService
+	steam       *services.SteamService
+	mu          sync.RWMutex
+	searchCache map[string]cachedSearch
+	dealsCache  map[int]cachedDeals
 }
 
-func NewSearchHandler(
-	itad *services.ITADService,
-	currency *services.CurrencyService,
-	steam *services.SteamService,
-	scraper *services.ScraperService,
-) *SearchHandler {
-	return &SearchHandler{itad: itad, currency: currency, steam: steam, scraper: scraper}
+func NewSearchHandler(itad *services.ITADService, currency *services.CurrencyService, steam *services.SteamService) *SearchHandler {
+	return &SearchHandler{itad: itad, currency: currency, steam: steam, searchCache: make(map[string]cachedSearch), dealsCache: make(map[int]cachedDeals)}
 }
 
 func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if r.Method != http.MethodGet {
-		http.Error(w, "metodo no permitido", http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, models.SearchResponse{Error: "método no permitido"})
 		return
 	}
-
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
-		json.NewEncoder(w).Encode(models.SearchResponse{Error: "falta el parametro q"})
+		writeJSON(w, http.StatusBadRequest, models.SearchResponse{Error: "Ingresá el nombre de un juego."})
 		return
 	}
-
-	steamMode := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("steam_mode")))
-	steamCountry := "AR"
-	if steamMode == "global" {
-		steamCountry = "US"
+	if len([]rune(query)) > 100 {
+		writeJSON(w, http.StatusBadRequest, models.SearchResponse{Error: "La búsqueda no puede superar 100 caracteres."})
+		return
 	}
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-
-	var itadResults []models.GameResult
-	var usdRate float64
-
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		results, _ := h.itad.Search(query)
-		mu.Lock()
-		itadResults = results
-		mu.Unlock()
-	}()
-
-	go func() {
-		defer wg.Done()
-		rate, _ := h.currency.GetBlueRate()
-		mu.Lock()
-		usdRate = rate
-		mu.Unlock()
-	}()
-
-	wg.Wait()
-
-	var finalResults []models.GameResult
-
-	if len(itadResults) > 0 {
-		main := itadResults[0]
-		steamPrice, _ := h.steam.GetPriceByTitle(main.Title, steamCountry)
-
-		filtered := []models.StorePrice{}
-		for _, p := range main.Prices {
-			if !strings.Contains(strings.ToLower(p.StoreName), "steam") {
-				filtered = append(filtered, p)
+	steamMode := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("steam_mode")))
+	if steamMode == "" {
+		steamMode = "regional"
+	}
+	if steamMode != "regional" && steamMode != "global" {
+		writeJSON(w, http.StatusBadRequest, models.SearchResponse{Error: "steam_mode inválido."})
+		return
+	}
+	cacheKey := strings.ToLower(query) + "|" + steamMode
+	if response, ok := h.cachedSearch(cacheKey); ok {
+		w.Header().Set("X-Cache", "HIT")
+		writeJSON(w, http.StatusOK, response)
+		return
+	}
+	results, err := h.itad.Search(r.Context(), query)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, models.SearchResponse{Error: "No pudimos consultar las tiendas ahora. Probá de nuevo en unos segundos."})
+		return
+	}
+	response := models.SearchResponse{Query: query, Results: results}
+	if rate, err := h.currency.GetBlueRate(r.Context()); err == nil {
+		response.USDRate = rate
+	} else {
+		response.Warnings = append(response.Warnings, "No se pudo actualizar la conversión USD/ARS; mostramos la moneda original.")
+	}
+	for index := range response.Results {
+		if index == 0 {
+			country := "AR"
+			if steamMode == "global" {
+				country = "US"
+			}
+			steamPrice, steamErr := h.steam.GetPriceByTitle(r.Context(), response.Results[index].Title, country)
+			if steamErr != nil {
+				response.Warnings = append(response.Warnings, "Steam no respondió para el primer resultado; el resto de tiendas sigue disponible.")
+			}
+			if steamPrice != nil && steamPrice.Found {
+				response.Results[index].Prices = append(response.Results[index].Prices, models.StorePrice{StoreName: "Steam", Price: steamPrice.Price, Regular: steamPrice.Regular, Currency: steamPrice.Currency, Discount: steamPrice.Discount, URL: steamPrice.URL, OnSale: steamPrice.Discount > 0, IsRegional: country == "AR"})
 			}
 		}
-		main.Prices = filtered
-
-		if steamPrice != nil && steamPrice.Found {
-			steamStore := models.StorePrice{
-				StoreName:  "Steam",
-				PriceUSD:   steamPrice.PriceUSD,
-				PriceARS:   steamPrice.PriceARS,
-				RegularUSD: steamPrice.RegularUSD,
-				RegularARS: steamPrice.RegularARS,
-				Discount:   steamPrice.Discount,
-				URL:        steamPrice.URL,
-				OnSale:     steamPrice.Discount > 0,
-				IsRegional: steamCountry == "AR",
-			}
-			main.Prices = append([]models.StorePrice{steamStore}, main.Prices...)
-		}
-
-		main.Prices = append(main.Prices, models.StorePrice{
-			StoreName: "Instant Gaming",
-			URL:       fmt.Sprintf("https://www.instant-gaming.com/en/search/?query=%s", url.QueryEscape(query)),
-		})
-
-		main.Prices = append(main.Prices, models.StorePrice{
-			StoreName: "Eneba",
-			URL:       fmt.Sprintf("https://www.eneba.com/store/all?text=%s", url.QueryEscape(query)),
-		})
-
-		main.Prices = append(main.Prices, models.StorePrice{
-			StoreName: "G2A",
-			URL:       fmt.Sprintf("https://www.g2a.com/search?query=%s", url.QueryEscape(query)),
-		})
-
-		main.Prices = append(main.Prices, models.StorePrice{
-			StoreName: "MundoSteam",
-			URL:       fmt.Sprintf("https://mundosteam.com/buscar?q=%s", url.QueryEscape(query)),
-			Warning:   "Esta tienda vende acceso a cuentas compartidas, no el juego en tu cuenta personal. No recomendamos su uso.",
-		})
-
-		main.Prices, main.BestDeal = sortPricesAndPickBest(main.Prices, usdRate)
-
-		finalResults = append(finalResults, main)
-		finalResults = append(finalResults, itadResults[1:]...)
+		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(response.Results[index].Prices, response.USDRate)
 	}
-
-	json.NewEncoder(w).Encode(models.SearchResponse{
-		Query:   query,
-		Results: finalResults,
-		USDRate: usdRate,
-	})
+	h.storeSearch(cacheKey, response)
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	writeJSON(w, http.StatusOK, response)
 }
-
+func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, models.DealsResponse{Error: "método no permitido"})
+		return
+	}
+	limit := 12
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if _, err := fmt.Sscanf(value, "%d", &limit); err != nil || limit < 1 || limit > 24 {
+			writeJSON(w, http.StatusBadRequest, models.DealsResponse{Error: "limit debe estar entre 1 y 24."})
+			return
+		}
+	}
+	if response, ok := h.cachedDeals(limit); ok {
+		w.Header().Set("X-Cache", "HIT")
+		writeJSON(w, http.StatusOK, response)
+		return
+	}
+	deals, err := h.itad.GetDeals(r.Context(), limit)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
+		return
+	}
+	response := models.DealsResponse{Deals: deals}
+	h.storeDeals(limit, response)
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	writeJSON(w, http.StatusOK, response)
+}
+func (h *SearchHandler) cachedSearch(key string) (models.SearchResponse, bool) {
+	h.mu.RLock()
+	entry, ok := h.searchCache[key]
+	h.mu.RUnlock()
+	return entry.response, ok && time.Now().Before(entry.expiresAt)
+}
+func (h *SearchHandler) storeSearch(key string, response models.SearchResponse) {
+	h.mu.Lock()
+	h.searchCache[key] = cachedSearch{response: response, expiresAt: time.Now().Add(cacheTTL)}
+	h.mu.Unlock()
+}
+func (h *SearchHandler) cachedDeals(limit int) (models.DealsResponse, bool) {
+	h.mu.RLock()
+	entry, ok := h.dealsCache[limit]
+	h.mu.RUnlock()
+	return entry.response, ok && time.Now().Before(entry.expiresAt)
+}
+func (h *SearchHandler) storeDeals(limit int, response models.DealsResponse) {
+	h.mu.Lock()
+	h.dealsCache[limit] = cachedDeals{response: response, expiresAt: time.Now().Add(cacheTTL)}
+	h.mu.Unlock()
+}
 func sortPricesAndPickBest(prices []models.StorePrice, usdRate float64) ([]models.StorePrice, *models.StorePrice) {
 	sorted := append([]models.StorePrice(nil), prices...)
-
 	sort.SliceStable(sorted, func(i, j int) bool {
-		leftPrice, leftHasPrice := normalizedARS(sorted[i], usdRate)
-		rightPrice, rightHasPrice := normalizedARS(sorted[j], usdRate)
-
-		if leftHasPrice != rightHasPrice {
-			return leftHasPrice
+		left, leftOK := normalizedARS(sorted[i], usdRate)
+		right, rightOK := normalizedARS(sorted[j], usdRate)
+		if leftOK != rightOK {
+			return leftOK
 		}
-
-		if leftHasPrice && rightHasPrice && leftPrice != rightPrice {
-			return leftPrice < rightPrice
+		if leftOK && left != right {
+			return left < right
 		}
-
-		if sorted[i].StoreName == "MundoSteam" || sorted[j].StoreName == "MundoSteam" {
-			return sorted[j].StoreName == "MundoSteam"
-		}
-
-		return sorted[i].StoreName < sorted[j].StoreName
+		return strings.ToLower(sorted[i].StoreName) < strings.ToLower(sorted[j].StoreName)
 	})
-
 	for i := range sorted {
-		if _, ok := normalizedARS(sorted[i], usdRate); ok && sorted[i].StoreName != "MundoSteam" {
+		if _, ok := normalizedARS(sorted[i], usdRate); ok {
 			best := sorted[i]
 			return sorted, &best
 		}
 	}
-
 	return sorted, nil
 }
-
 func normalizedARS(price models.StorePrice, usdRate float64) (float64, bool) {
-	if price.StoreName == "MundoSteam" {
+	switch strings.ToUpper(price.Currency) {
+	case "ARS":
+		return price.Price, price.Price > 0
+	case "USD":
+		return price.Price * usdRate, price.Price > 0 && usdRate > 0
+	default:
 		return 0, false
 	}
-
-	if price.PriceARS > 0 {
-		return price.PriceARS, true
-	}
-
-	if price.PriceUSD > 0 && usdRate > 0 {
-		return price.PriceUSD * usdRate, true
-	}
-
-	return 0, false
+}
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
