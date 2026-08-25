@@ -14,10 +14,15 @@ const results = {
   }],
 }
 
-const deals = { deals: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', is_near_low: true, popularity_rank: 3, matched_stores: ['Steam', 'Epic Games Store'] }] }
+const deals = { deals: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', is_near_low: true }] }
+const discover = {
+  popular: [{ id: '730', title: 'Counter-Strike 2', image_url: '', steam_url: 'https://store.steampowered.com/app/730/', rank: 1 }],
+  most_played: [{ id: '570', title: 'Dota 2', image_url: '', steam_url: 'https://store.steampowered.com/app/570/', rank: 2, players: 800000 }],
+}
 
 async function mockAPI(page) {
   await page.route('**/api/deals**', (route) => route.fulfill({ json: deals }))
+  await page.route('**/api/discover**', (route) => route.fulfill({ json: discover }))
   await page.route('**/api/search**', (route) => route.fulfill({ json: results }))
 }
 
@@ -30,12 +35,13 @@ test('search is shareable and shows only the real regional Steam price', async (
   await expect(page.getByText('GOG', { exact: true })).toBeVisible()
 })
 
-test('popular offers identify the Steam rank and matched stores', async ({ page }) => {
+test('Steam rankings open a price comparison', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Populares en oferta' })).toBeVisible()
-  await expect(page.getByText('#3 en Steam')).toBeVisible()
-  await expect(page.getByText('Epic Games Store · 2 tiendas')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Populares en Steam' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Más jugados en Steam' })).toBeVisible()
+  await page.getByRole('button', { name: /comparar precios de counter-strike 2/i }).click()
+  await expect(page.getByRole('heading', { name: 'Counter-Strike 2', exact: true })).toBeVisible()
 })
 
 test('mobile layout has no horizontal overflow', async ({ page }) => {

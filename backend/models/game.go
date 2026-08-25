@@ -36,8 +36,15 @@ type FeaturedDeal struct {
 	ExpiresAt  string  `json:"expires_at,omitempty"`
 	HistoryLow float64 `json:"history_low,omitempty"`
 	IsNearLow  bool    `json:"is_near_low"`
-	PopularityRank int      `json:"popularity_rank,omitempty"`
-	MatchedStores  []string `json:"matched_stores,omitempty"`
+}
+
+type RankedGame struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	ImageURL string `json:"image_url"`
+	SteamURL string `json:"steam_url"`
+	Rank     int    `json:"rank"`
+	Players  int    `json:"players,omitempty"`
 }
 
 type SearchResponse struct {
@@ -52,4 +59,11 @@ type DealsResponse struct {
 	Deals    []FeaturedDeal `json:"deals"`
 	Warnings []string       `json:"warnings,omitempty"`
 	Error    string         `json:"error,omitempty"`
+}
+
+type DiscoverResponse struct {
+	Popular    []RankedGame `json:"popular"`
+	MostPlayed []RankedGame `json:"most_played"`
+	Warnings   []string     `json:"warnings,omitempty"`
+	Error      string       `json:"error,omitempty"`
 }

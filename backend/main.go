@@ -28,6 +28,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/search", searchHandler.Handle)
 	mux.HandleFunc("/api/deals", searchHandler.HandleDeals)
+	mux.HandleFunc("/api/discover", searchHandler.HandleDiscover)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

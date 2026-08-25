@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"game-price-comparator/models"
 )
 
 type SteamService struct{ client *http.Client }
@@ -68,11 +71,10 @@ func (s *SteamService) GetTopSellers(ctx context.Context, limit int) ([]SteamTop
 	var payload struct {
 		TopSellers struct {
 			Items []struct {
-				ID         int    `json:"id"`
-				Type       int    `json:"type"`
-				Name       string `json:"name"`
-				Discounted bool   `json:"discounted"`
-				Image      string `json:"header_image"`
+				ID    int    `json:"id"`
+				Type  int    `json:"type"`
+				Name  string `json:"name"`
+				Image string `json:"header_image"`
 			} `json:"items"`
 		} `json:"top_sellers"`
 	}
@@ -83,7 +85,7 @@ func (s *SteamService) GetTopSellers(ctx context.Context, limit int) ([]SteamTop
 	popular := make([]SteamTopSeller, 0, limit)
 	seen := make(map[int]struct{})
 	for _, item := range payload.TopSellers.Items {
-		if item.ID == 0 || item.Name == "" || item.Type != 0 || !item.Discounted {
+		if item.ID == 0 || item.Name == "" || item.Type != 0 {
 			continue
 		}
 		if _, ok := seen[item.ID]; ok {
@@ -96,6 +98,108 @@ func (s *SteamService) GetTopSellers(ctx context.Context, limit int) ([]SteamTop
 		}
 	}
 	return popular, nil
+}
+
+func (s *SteamService) GetMostPlayed(ctx context.Context, limit int) ([]models.RankedGame, error) {
+	if limit < 1 {
+		limit = 8
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.steampowered.com/ISteamChartsService/GetMostPlayedGames/v1/", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("consultando más jugados de Steam: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("más jugados de Steam respondió con status %d", resp.StatusCode)
+	}
+	var payload struct {
+		Response struct {
+			Ranks []struct {
+				Rank  int `json:"rank"`
+				AppID int `json:"appid"`
+				Peak  int `json:"peak_in_game"`
+			} `json:"ranks"`
+		} `json:"response"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("parseando más jugados de Steam: %w", err)
+	}
+	if len(payload.Response.Ranks) > limit {
+		payload.Response.Ranks = payload.Response.Ranks[:limit]
+	}
+
+	type resolvedGame struct {
+		index int
+		game  models.RankedGame
+		ok    bool
+	}
+	resolved := make([]resolvedGame, len(payload.Response.Ranks))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for worker := 0; worker < 4; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range jobs {
+				rank := payload.Response.Ranks[index]
+				game, ok := s.getBasicGame(ctx, rank.AppID)
+				if ok {
+					game.Rank = rank.Rank
+					game.Players = rank.Peak
+				}
+				resolved[index] = resolvedGame{index: index, game: game, ok: ok}
+			}
+		}()
+	}
+	for index := range payload.Response.Ranks {
+		jobs <- index
+	}
+	close(jobs)
+	wg.Wait()
+
+	games := make([]models.RankedGame, 0, len(resolved))
+	for _, result := range resolved {
+		if result.ok {
+			games = append(games, result.game)
+		}
+	}
+	return games, nil
+}
+
+func (s *SteamService) getBasicGame(ctx context.Context, appID int) (models.RankedGame, bool) {
+	appIDText := fmt.Sprintf("%d", appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://store.steampowered.com/api/appdetails?appids=%s&country=AR&l=spanish", url.QueryEscape(appIDText)), nil)
+	if err != nil {
+		return models.RankedGame{}, false
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return models.RankedGame{}, false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return models.RankedGame{}, false
+	}
+	var payload map[string]struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Name        string `json:"name"`
+			Type        string `json:"type"`
+			HeaderImage string `json:"header_image"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return models.RankedGame{}, false
+	}
+	entry, ok := payload[appIDText]
+	if !ok || !entry.Success || entry.Data.Type != "game" || entry.Data.Name == "" {
+		return models.RankedGame{}, false
+	}
+	return models.RankedGame{ID: appIDText, Title: entry.Data.Name, ImageURL: entry.Data.HeaderImage, SteamURL: fmt.Sprintf("https://store.steampowered.com/app/%s/", appIDText)}, true
 }
 func (s *SteamService) GetPriceByAppID(ctx context.Context, appID, country string) (*SteamPrice, error) {
 	if country == "" {

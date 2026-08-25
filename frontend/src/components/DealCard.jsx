@@ -8,7 +8,7 @@ export default function DealCard({ deal, onSearch }) {
       </a>
       <div className="deal-content">
         <div className="deal-meta">
-          <span>{deal.popularity_rank ? `#${deal.popularity_rank} en Steam` : deal.store_name}</span>
+          <span>{deal.store_name}</span>
           {deal.is_near_low && <span className="low-badge">cerca del mínimo</span>}
         </div>
         <button className="deal-title" type="button" onClick={() => onSearch(deal.title)}>{deal.title}</button>
@@ -17,7 +17,6 @@ export default function DealCard({ deal, onSearch }) {
           {deal.regular > deal.price && <del>{formatMoney(deal.regular, deal.currency)}</del>}
           <span className="discount">−{deal.discount_percent}%</span>
         </div>
-        {deal.matched_stores?.length > 1 && <span className="deal-match">{deal.store_name} · {deal.matched_stores.length} tiendas</span>}
       </div>
     </article>
   )

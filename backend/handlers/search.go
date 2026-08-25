@@ -23,13 +23,18 @@ type cachedDeals struct {
 	response  models.DealsResponse
 	expiresAt time.Time
 }
+type cachedDiscover struct {
+	response  models.DiscoverResponse
+	expiresAt time.Time
+}
 type SearchHandler struct {
-	itad        *services.ITADService
-	currency    *services.CurrencyService
-	steam       *services.SteamService
-	mu          sync.RWMutex
-	searchCache map[string]cachedSearch
-	dealsCache  map[int]cachedDeals
+	itad          *services.ITADService
+	currency      *services.CurrencyService
+	steam         *services.SteamService
+	mu            sync.RWMutex
+	searchCache   map[string]cachedSearch
+	dealsCache    map[int]cachedDeals
+	discoverCache cachedDiscover
 }
 
 func NewSearchHandler(itad *services.ITADService, currency *services.CurrencyService, steam *services.SteamService) *SearchHandler {
@@ -121,25 +126,68 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
-	popular, popularErr := h.steam.GetTopSellers(r.Context(), 12)
-	deals := []models.FeaturedDeal{}
-	var err error
-	if popularErr == nil {
-		deals, err = h.itad.GetRadarDeals(r.Context(), popular, limit)
+	deals, err := h.itad.GetDeals(r.Context(), limit)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
+		return
 	}
 	response := models.DealsResponse{Deals: deals}
-	if popularErr != nil || err != nil || len(deals) == 0 {
-		deals, err = h.itad.GetDeals(r.Context(), limit)
-		if err != nil {
-			writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
-			return
-		}
-		response.Deals = deals
-		response.Warnings = append(response.Warnings, "Mostramos ofertas destacadas mientras se actualiza el radar de populares.")
-	}
 	h.storeDeals(limit, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *SearchHandler) HandleDiscover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, models.DiscoverResponse{Error: "método no permitido"})
+		return
+	}
+	if response, ok := h.cachedDiscoverResponse(); ok {
+		w.Header().Set("X-Cache", "HIT")
+		writeJSON(w, http.StatusOK, response)
+		return
+	}
+
+	type result struct {
+		popular    []services.SteamTopSeller
+		mostPlayed []models.RankedGame
+		err        error
+	}
+	popularResult := make(chan result, 1)
+	mostPlayedResult := make(chan result, 1)
+	go func() {
+		games, err := h.steam.GetTopSellers(r.Context(), 8)
+		popularResult <- result{popular: games, err: err}
+	}()
+	go func() {
+		games, err := h.steam.GetMostPlayed(r.Context(), 8)
+		mostPlayedResult <- result{mostPlayed: games, err: err}
+	}()
+
+	popular := <-popularResult
+	mostPlayed := <-mostPlayedResult
+	response := models.DiscoverResponse{Popular: rankedTopSellers(popular.popular), MostPlayed: mostPlayed.mostPlayed}
+	if popular.err != nil {
+		response.Warnings = append(response.Warnings, "No pudimos actualizar los populares de Steam.")
+	}
+	if mostPlayed.err != nil {
+		response.Warnings = append(response.Warnings, "No pudimos actualizar los más jugados de Steam.")
+	}
+	if len(response.Popular) == 0 && len(response.MostPlayed) == 0 {
+		writeJSON(w, http.StatusBadGateway, models.DiscoverResponse{Error: "No pudimos cargar los rankings de Steam ahora."})
+		return
+	}
+	h.storeDiscover(response)
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	writeJSON(w, http.StatusOK, response)
+}
+
+func rankedTopSellers(games []services.SteamTopSeller) []models.RankedGame {
+	ranked := make([]models.RankedGame, 0, len(games))
+	for _, game := range games {
+		ranked = append(ranked, models.RankedGame{ID: game.AppID, Title: game.Title, ImageURL: game.Image, SteamURL: fmt.Sprintf("https://store.steampowered.com/app/%s/", game.AppID), Rank: game.Rank})
+	}
+	return ranked
 }
 func (h *SearchHandler) cachedSearch(key string) (models.SearchResponse, bool) {
 	h.mu.RLock()
@@ -161,6 +209,17 @@ func (h *SearchHandler) cachedDeals(limit int) (models.DealsResponse, bool) {
 func (h *SearchHandler) storeDeals(limit int, response models.DealsResponse) {
 	h.mu.Lock()
 	h.dealsCache[limit] = cachedDeals{response: response, expiresAt: time.Now().Add(cacheTTL)}
+	h.mu.Unlock()
+}
+func (h *SearchHandler) cachedDiscoverResponse() (models.DiscoverResponse, bool) {
+	h.mu.RLock()
+	entry := h.discoverCache
+	h.mu.RUnlock()
+	return entry.response, !entry.expiresAt.IsZero() && time.Now().Before(entry.expiresAt)
+}
+func (h *SearchHandler) storeDiscover(response models.DiscoverResponse) {
+	h.mu.Lock()
+	h.discoverCache = cachedDiscover{response: response, expiresAt: time.Now().Add(cacheTTL)}
 	h.mu.Unlock()
 }
 func sortPricesAndPickBest(prices []models.StorePrice, usdRate float64) ([]models.StorePrice, *models.StorePrice) {

@@ -29,6 +29,16 @@ export async function getDeals(signal) {
   }
 }
 
+export async function getDiscover(signal) {
+  try {
+    const { data } = await api.get('/api/discover', { signal })
+    return { popular: data.popular || [], mostPlayed: data.most_played || [] }
+  } catch (error) {
+    if (axios.isCancel(error)) throw error
+    throw new Error(messageFrom(error, 'No pudimos cargar los rankings de Steam.'), { cause: error })
+  }
+}
+
 export function formatMoney(amount, currency) {
   if (!Number.isFinite(amount) || amount <= 0) return 'Sin precio'
   try {
