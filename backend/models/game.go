@@ -48,11 +48,13 @@ type RankedGame struct {
 }
 
 type SearchResponse struct {
-	Query    string       `json:"query"`
-	Results  []GameResult `json:"results"`
-	USDRate  float64      `json:"usd_rate"`
-	Warnings []string     `json:"warnings,omitempty"`
-	Error    string       `json:"error,omitempty"`
+	Query        string       `json:"query"`
+	Results      []GameResult `json:"results"`
+	USDRate      float64      `json:"usd_rate"`
+	OfficialRate float64      `json:"official_rate"`
+	TaxRate      float64      `json:"tax_rate"`
+	Warnings     []string     `json:"warnings,omitempty"`
+	Error        string       `json:"error,omitempty"`
 }
 
 type DealsResponse struct {

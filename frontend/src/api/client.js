@@ -60,3 +60,11 @@ export function displayMoney(price, preferredCurrency, usdRate) {
   if (currency === 'ARS' && preferredCurrency === 'USD' && usdRate > 0) return { label: formatMoney(price.price / usdRate, 'USD'), converted: true }
   return { label: formatMoney(price.price, currency), converted: false }
 }
+
+export function displayFinalMoney(price, preferredCurrency, officialRate, taxRate) {
+  const base = displayMoney(price, preferredCurrency, officialRate)
+  const currency = price?.currency?.toUpperCase()
+  if (currency !== 'USD' || preferredCurrency !== 'ARS' || officialRate <= 0 || taxRate <= 0) return { ...base, includesTax: false, baseLabel: base.label }
+  const total = price.price * officialRate * (1 + taxRate)
+  return { label: formatMoney(total, 'ARS'), converted: true, includesTax: true, baseLabel: formatMoney(price.price * officialRate, 'ARS') }
+}

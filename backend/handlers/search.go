@@ -31,14 +31,18 @@ type SearchHandler struct {
 	itad          *services.ITADService
 	currency      *services.CurrencyService
 	steam         *services.SteamService
+	taxRate       float64
 	mu            sync.RWMutex
 	searchCache   map[string]cachedSearch
 	dealsCache    map[int]cachedDeals
 	discoverCache cachedDiscover
 }
 
-func NewSearchHandler(itad *services.ITADService, currency *services.CurrencyService, steam *services.SteamService) *SearchHandler {
-	return &SearchHandler{itad: itad, currency: currency, steam: steam, searchCache: make(map[string]cachedSearch), dealsCache: make(map[int]cachedDeals)}
+func NewSearchHandler(itad *services.ITADService, currency *services.CurrencyService, steam *services.SteamService, taxRate float64) *SearchHandler {
+	if taxRate < 0 || taxRate > 1 {
+		taxRate = 0.21
+	}
+	return &SearchHandler{itad: itad, currency: currency, steam: steam, taxRate: taxRate, searchCache: make(map[string]cachedSearch), dealsCache: make(map[int]cachedDeals)}
 }
 
 func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -75,10 +79,14 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := models.SearchResponse{Query: query, Results: results}
-	if rate, err := h.currency.GetBlueRate(r.Context()); err == nil {
-		response.USDRate = rate
+	comparisonRate := 0.0
+	if rates, err := h.currency.GetRates(r.Context()); err == nil {
+		response.USDRate = rates.Blue
+		response.OfficialRate = rates.Official
+		response.TaxRate = h.taxRate
+		comparisonRate = rates.Official * (1 + response.TaxRate)
 	} else {
-		response.Warnings = append(response.Warnings, "No se pudo actualizar la conversión USD/ARS; mostramos la moneda original.")
+		response.Warnings = append(response.Warnings, "No se pudo actualizar la cotización; mostramos el precio base.")
 	}
 	for index := range response.Results {
 		// ITAD ya consulta Argentina y entrega la cotización regional de Steam en ARS.
@@ -93,7 +101,7 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 				response.Results[index].Prices = append(response.Results[index].Prices, models.StorePrice{StoreName: "Steam", Price: steamPrice.Price, Regular: steamPrice.Regular, Currency: steamPrice.Currency, Discount: steamPrice.Discount, URL: steamPrice.URL, OnSale: steamPrice.Discount > 0})
 			}
 		}
-		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(response.Results[index].Prices, response.USDRate)
+		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(response.Results[index].Prices, comparisonRate)
 	}
 	h.storeSearch(cacheKey, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")

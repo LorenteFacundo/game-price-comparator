@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"game-price-comparator/handlers"
@@ -24,7 +25,7 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	searchHandler := handlers.NewSearchHandler(services.NewITADService(apiKey), services.NewCurrencyService(), services.NewSteamService())
+	searchHandler := handlers.NewSearchHandler(services.NewITADService(apiKey), services.NewCurrencyService(), services.NewSteamService(), taxRateFromEnv())
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/search", searchHandler.Handle)
 	mux.HandleFunc("/api/deals", searchHandler.HandleDeals)
@@ -41,4 +42,18 @@ func main() {
 	server := &http.Server{Addr: ":" + port, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API escuchando en http://localhost:%s", port)
 	log.Fatal(server.ListenAndServe())
+}
+
+func taxRateFromEnv() float64 {
+	const defaultTaxRate = 0.21
+	value := os.Getenv("DIGITAL_SERVICES_TAX_RATE")
+	if value == "" {
+		return defaultTaxRate
+	}
+	rate, err := strconv.ParseFloat(value, 64)
+	if err != nil || rate < 0 || rate > 1 {
+		log.Printf("DIGITAL_SERVICES_TAX_RATE inválida; usando %.0f%%", defaultTaxRate*100)
+		return defaultTaxRate
+	}
+	return rate
 }

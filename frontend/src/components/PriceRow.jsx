@@ -1,7 +1,7 @@
-import { displayMoney, formatMoney } from '../api/client'
+import { displayFinalMoney, formatMoney } from '../api/client'
 
-export default function PriceRow({ price, preferredCurrency, usdRate, isBest }) {
-  const shown = displayMoney(price, preferredCurrency, usdRate)
+export default function PriceRow({ price, preferredCurrency, officialRate, taxRate, isBest }) {
+  const shown = displayFinalMoney(price, preferredCurrency, officialRate, taxRate)
   const regular = price.regular > price.price ? formatMoney(price.regular, price.currency) : null
   return (
     <li className={`price-row ${isBest ? 'is-best' : ''}`}>
@@ -16,7 +16,7 @@ export default function PriceRow({ price, preferredCurrency, usdRate, isBest }) 
         {isBest && <span className="best-badge">Mejor precio</span>}
         <strong>{shown.label}</strong>
         {regular && <del>{regular}</del>}
-        {shown.converted && <small>convertido desde {formatMoney(price.price, price.currency)}</small>}
+        {shown.includesTax ? <small>final estimado · IVA {Math.round(taxRate * 100)}%</small> : <small>{price.currency === 'ARS' ? 'precio publicado por tienda' : `base · ${formatMoney(price.price, price.currency)}`}</small>}
       </div>
       <a className="store-link" href={price.url} target="_blank" rel="noopener noreferrer">Ir a tienda <span aria-hidden="true">↗</span></a>
     </li>

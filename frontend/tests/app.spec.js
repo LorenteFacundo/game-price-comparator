@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test'
 const results = {
   query: 'Hades',
   usd_rate: 1370,
+  official_rate: 1200,
+  tax_rate: 0.21,
   warnings: [],
   results: [{
     id: 'hades', title: 'Hades', image_url: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1145360/header.jpg',
@@ -32,6 +34,7 @@ test('search is shareable and shows only the real regional Steam price', async (
   await expect(page.getByRole('heading', { name: 'Hades', exact: true })).toBeVisible()
   await expect(page.getByText('$\u00a08.799').first()).toBeVisible()
   await expect(page.getByText('regional · ARS')).toBeVisible()
+  await expect(page.getByText('USD: final estimado con IVA 21% · ARS: precio publicado por tienda')).toBeVisible()
   await expect(page.getByText('GOG', { exact: true })).toBeVisible()
 })
 
