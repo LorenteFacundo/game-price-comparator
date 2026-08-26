@@ -57,21 +57,18 @@ export function formatMoney(amount, currency) {
   }
 }
 
-export function displayMoney(price, preferredCurrency, usdRate) {
-  if (!price?.price || !price?.currency) return { label: 'Sin precio', converted: false }
-  const currency = price.currency.toUpperCase()
-  if (currency === preferredCurrency) return { label: formatMoney(price.price, currency), converted: false }
-  if (currency === 'USD' && preferredCurrency === 'ARS' && usdRate > 0) return { label: formatMoney(price.price * usdRate, 'ARS'), converted: true }
-  if (currency === 'ARS' && preferredCurrency === 'USD' && usdRate > 0) return { label: formatMoney(price.price / usdRate, 'USD'), converted: true }
-  return { label: formatMoney(price.price, currency), converted: false }
-}
-
 export function displayFinalMoney(price, preferredCurrency, officialRate, cardRate, taxRate) {
-  const base = displayMoney(price, preferredCurrency, officialRate)
+  if (!price?.price || !price?.currency) return { label: 'Sin precio', converted: false, includesTax: false, note: '' }
   const currency = price?.currency?.toUpperCase()
-  if (currency !== 'USD' || preferredCurrency !== 'ARS') return { ...base, includesTax: false, baseLabel: base.label }
   const totalRate = cardRate > 0 ? cardRate : officialRate * (1 + taxRate)
-  if (totalRate <= 0) return { ...base, includesTax: false, baseLabel: base.label }
-  const total = price.price * totalRate
-  return { label: formatMoney(total, 'ARS'), converted: true, includesTax: true, baseLabel: formatMoney(price.price * officialRate, 'ARS') }
+
+  if (preferredCurrency === 'USD') {
+    if (currency === 'USD') return { label: formatMoney(price.price, 'USD'), converted: false, includesTax: false, note: 'precio regional publicado en USD' }
+    if (currency === 'ARS' && totalRate > 0) return { label: formatMoney(price.price / totalRate, 'USD'), converted: true, includesTax: false, note: 'equivalente regional al dólar tarjeta' }
+    return { label: formatMoney(price.price, currency), converted: false, includesTax: false, note: 'cotización no disponible' }
+  }
+
+  if (currency === 'ARS') return { label: formatMoney(price.price, 'ARS'), converted: false, includesTax: false, note: 'precio regional publicado · no se reconvierte' }
+  if (currency === 'USD' && totalRate > 0) return { label: formatMoney(price.price * totalRate, 'ARS'), converted: true, includesTax: true, note: `total con IVA ${Math.round(taxRate * 100)}%` }
+  return { label: formatMoney(price.price, currency), converted: false, includesTax: false, note: 'cotización no disponible' }
 }

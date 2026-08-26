@@ -48,10 +48,10 @@ async function mockAPI(page) {
 test('search is shareable and shows only the real regional Steam price', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/?q=Hades&steam=regional')
-  await expect(page.getByRole('heading', { name: 'Hades', exact: true })).toBeVisible()
+  await expect(page.locator('#results-title')).toHaveText('Hades')
   await expect(page.getByText('$\u00a08.799').first()).toBeVisible()
   await expect(page.getByText('regional · ARS')).toBeVisible()
-  await expect(page.getByText('USD: final estimado con dólar tarjeta · IVA 21% · ARS: precio publicado por tienda')).toBeVisible()
+  await expect(page.getByText('ARS + IMP · USD × 1.452 ARS/USD (oficial 1.200 ARS/USD + IVA 21%) = total final. ARS regional no se reconvierte.')).toBeVisible()
   await expect(page.getByText('GOG', { exact: true })).toBeVisible()
   await expect(page.getByText('$\u00a014.505').first()).toBeVisible()
 })
@@ -59,6 +59,7 @@ test('search is shareable and shows only the real regional Steam price', async (
 test('currency and Steam location controls update the rendered price', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/?q=Hades&steam=regional')
+  await expect(page.getByRole('button', { name: 'ARS + IMP', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'USD', exact: true }).click()
   await expect(page.getByText('$9.99').first()).toBeVisible()
   await page.getByRole('button', { name: 'Global', exact: true }).click()
@@ -88,6 +89,6 @@ test('mobile layout has no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAPI(page)
   await page.goto('/?q=Hades')
-  await expect(page.getByRole('heading', { name: 'Hades', exact: true })).toBeVisible()
+  await expect(page.locator('#results-title')).toHaveText('Hades')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
 })

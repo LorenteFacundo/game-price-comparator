@@ -94,6 +94,9 @@ export default function App() {
   }
 
   const favoriteIds = new Set(favorites.map((game) => game.id))
+  const taxPercent = Math.round(search.taxRate * 100)
+  const formattedCardRate = search.cardRate > 0 ? formatRate(search.cardRate) : 'no disponible'
+  const formattedOfficialRate = search.officialRate > 0 ? formatRate(search.officialRate) : 'no disponible'
 
   return (
     <div className="app-shell">
@@ -129,7 +132,7 @@ export default function App() {
 
         {search.results.length > 0 && !loading && <section className="results-section" aria-labelledby="results-title">
           <div className="section-heading"><h2 id="results-title">{query}</h2><span className="heading-note">{search.results.length} juego{search.results.length !== 1 ? 's' : ''}</span></div>
-          <div className="tax-note">{currency === 'ARS' ? `USD: final estimado con dólar tarjeta · IVA ${Math.round(search.taxRate * 100) || 21}% · ARS: precio publicado por tienda` : 'Mostrando precios base en USD'}</div>
+          <div className="tax-note">{currency === 'ARS' ? `ARS + IMP · USD × ${formattedCardRate} (oficial ${formattedOfficialRate} + IVA ${taxPercent}%) = total final. ARS regional no se reconvierte.` : `USD · Precio regional de Argentina. ARS se muestra como equivalente al dólar tarjeta ${formattedCardRate}; USD publicado no se convierte.`}</div>
           <div className="results-grid">{search.results.map((game) => <GameCard key={game.id} game={game} currency={currency} officialRate={search.officialRate} cardRate={search.cardRate} taxRate={search.taxRate} isFavorite={favoriteIds.has(game.id)} onToggleFavorite={toggleFavorite} />)}</div>
         </section>}
 
@@ -138,4 +141,8 @@ export default function App() {
       <Footer />
     </div>
   )
+}
+
+function formatRate(rate) {
+  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(rate) + ' ARS/USD'
 }

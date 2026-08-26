@@ -33,8 +33,8 @@ export default function SearchPanel({ query, onQueryChange, onSearch, loading, c
         <fieldset>
           <legend>Moneda</legend>
           <div className="segmented-control">
-            {['ARS', 'USD'].map((option) => (
-              <button key={option} className={currency === option ? 'is-active' : ''} type="button" aria-pressed={currency === option} onClick={() => onCurrencyChange(option)}>{option}</button>
+            {[{ value: 'ARS', label: 'ARS + IMP' }, { value: 'USD', label: 'USD' }].map((option) => (
+              <button key={option.value} className={currency === option.value ? 'is-active' : ''} type="button" aria-pressed={currency === option.value} onClick={() => onCurrencyChange(option.value)}>{option.label}</button>
             ))}
           </div>
         </fieldset>
