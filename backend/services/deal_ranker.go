@@ -63,35 +63,41 @@ func applyDealScore(deal *models.FeaturedDeal, signal SteamDealSignal) {
 	deal.PopularRank = signal.PopularRank
 	deal.Players = signal.Players
 
-	discount := math.Min(float64(deal.Discount), 75) / 75 * 15
+	// Ya todas las candidatas están en oferta. El porcentaje exacto no define
+	// si vale la pena mirarla: sólo aporta un bonus pequeño por estar rebajada.
+	discount := 0.0
+	if deal.Discount > 0 {
+		discount = 5
+	}
 	history := 0.0
 	if deal.IsNearLow {
-		history = 15
-	} else if deal.HistoryLow > 0 && deal.Price <= deal.HistoryLow*1.15 {
 		history = 8
+	} else if deal.HistoryLow > 0 && deal.Price <= deal.HistoryLow*1.15 {
+		history = 4
 	}
 	popularity := 0.0
 	if signal.PopularRank > 0 {
-		popularity = 25 * math.Max(0, 1-float64(signal.PopularRank-1)/30)
+		// Ventas recientes: 25% más peso que el modelo anterior (25 → 31,25).
+		popularity = 31.25 * math.Max(0, 1-float64(signal.PopularRank-1)/30)
 	}
 	players := 0.0
 	if signal.Players > 0 {
-		players = 20 * math.Min(1, math.Log10(float64(signal.Players)+1)/6)
+		players = 25 * math.Min(1, math.Log10(float64(signal.Players)+1)/6)
 	}
 	reviews := 0.0
 	if signal.ReviewCount > 0 {
 		adjusted := (float64(signal.ReviewPct)*float64(signal.ReviewCount) + 75*100) / float64(signal.ReviewCount+100)
 		volume := math.Min(1, math.Log10(float64(signal.ReviewCount)+1)/5)
-		reviews = 20 * (.75*adjusted/100 + .25*volume)
+		reviews = 25 * (.75*adjusted/100 + .25*volume)
 	}
-	freshness := 1.0
+	freshness := 0.5
 	if deal.ExpiresAt != "" {
 		if expiry, err := time.Parse(time.RFC3339, deal.ExpiresAt); err == nil {
 			remaining := time.Until(expiry)
 			if remaining > 0 && remaining <= 7*24*time.Hour {
-				freshness = 5
-			} else if remaining > 0 && remaining <= 30*24*time.Hour {
 				freshness = 3
+			} else if remaining > 0 && remaining <= 30*24*time.Hour {
+				freshness = 1.5
 			}
 		}
 	}

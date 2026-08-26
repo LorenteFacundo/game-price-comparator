@@ -44,6 +44,22 @@ func TestRankDealsDeduplicatesEditions(t *testing.T) {
 	}
 }
 
+func TestRankDealsPrefersPopularityOverDiscountPercentage(t *testing.T) {
+	deals := []models.FeaturedDeal{
+		{ID: "popular", Title: "Popular Game", Price: 40, Discount: 20},
+		{ID: "obscure", Title: "Obscure Game", Price: 1, Discount: 95},
+	}
+	signals := map[string]SteamDealSignal{
+		"popular": {PopularRank: 2, Players: 150000, ReviewPct: 92, ReviewCount: 40000},
+		"obscure": {ReviewPct: 72, ReviewCount: 20},
+	}
+
+	result := RankDeals(deals, signals, 12)
+	if result.Featured[0].ID != "popular" {
+		t.Fatalf("expected popularity to outrank discount percentage, got %+v", result.Featured)
+	}
+}
+
 func TestSelectDealsForSignalsSamplesAcrossDiscountRange(t *testing.T) {
 	deals := make([]models.FeaturedDeal, 0, 40)
 	for index := 0; index < 40; index++ {
