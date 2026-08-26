@@ -4,6 +4,7 @@ const results = {
   query: 'Hades',
   usd_rate: 1370,
   official_rate: 1200,
+  card_rate: 1452,
   tax_rate: 0.21,
   warnings: [],
   results: [{
@@ -12,6 +13,18 @@ const results = {
     prices: [
       { store_name: 'Steam', price: 8799, regular: 17599, currency: 'ARS', discount_percent: 50, url: 'https://store.steampowered.com/app/1145360/', on_sale: true, is_regional: true },
       { store_name: 'GOG', price: 9.99, regular: 24.99, currency: 'USD', discount_percent: 60, url: 'https://www.gog.com/game/hades', on_sale: true, is_regional: false },
+    ],
+  }],
+}
+
+const globalResults = {
+  ...results,
+  results: [{
+    ...results.results[0],
+    best_deal: { store_name: 'Steam', price: 24.99, regular: 24.99, currency: 'USD', discount_percent: 0, url: 'https://store.steampowered.com/app/1145360/', on_sale: false, is_regional: false },
+    prices: [
+      { store_name: 'Steam', price: 24.99, regular: 24.99, currency: 'USD', discount_percent: 0, url: 'https://store.steampowered.com/app/1145360/', on_sale: false, is_regional: false },
+      results.results[0].prices[1],
     ],
   }],
 }
@@ -29,7 +42,7 @@ const discover = {
 async function mockAPI(page) {
   await page.route('**/api/deals**', (route) => route.fulfill({ json: deals }))
   await page.route('**/api/discover**', (route) => route.fulfill({ json: discover }))
-  await page.route('**/api/search**', (route) => route.fulfill({ json: results }))
+  await page.route('**/api/search**', (route) => route.fulfill({ json: route.request().url().includes('steam_mode=global') ? globalResults : results }))
 }
 
 test('search is shareable and shows only the real regional Steam price', async ({ page }) => {
@@ -38,8 +51,18 @@ test('search is shareable and shows only the real regional Steam price', async (
   await expect(page.getByRole('heading', { name: 'Hades', exact: true })).toBeVisible()
   await expect(page.getByText('$\u00a08.799').first()).toBeVisible()
   await expect(page.getByText('regional · ARS')).toBeVisible()
-  await expect(page.getByText('USD: final estimado con IVA 21% · ARS: precio publicado por tienda')).toBeVisible()
+  await expect(page.getByText('USD: final estimado con dólar tarjeta · IVA 21% · ARS: precio publicado por tienda')).toBeVisible()
   await expect(page.getByText('GOG', { exact: true })).toBeVisible()
+  await expect(page.getByText('$\u00a014.505').first()).toBeVisible()
+})
+
+test('currency and Steam location controls update the rendered price', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/?q=Hades&steam=regional')
+  await page.getByRole('button', { name: 'USD', exact: true }).click()
+  await expect(page.getByText('$9.99').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Global', exact: true }).click()
+  await expect(page.getByText('$24.99').first()).toBeVisible()
 })
 
 test('Steam rankings open a price comparison', async ({ page }) => {

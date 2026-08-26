@@ -85,28 +85,60 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		response.USDRate = rates.Blue
 		response.OfficialRate = rates.Official
 		response.TaxRate = h.taxRate
-		comparisonRate = rates.Official * (1 + response.TaxRate)
+		response.CardRate = rates.Official * (1 + response.TaxRate)
+		comparisonRate = response.CardRate
 	} else {
 		response.Warnings = append(response.Warnings, "No se pudo actualizar la cotización; mostramos el precio base.")
 	}
+	if steamMode == "global" {
+		response.Warnings = append(response.Warnings, h.replaceWithGlobalSteam(r.Context(), response.Results)...)
+	}
 	for index := range response.Results {
-		// ITAD ya consulta Argentina y entrega la cotización regional de Steam en ARS.
-		// Sólo consultamos Steam de forma directa cuando se pidió explícitamente el precio global.
-		if index == 0 && steamMode == "global" {
-			response.Results[index].Prices = withoutStore(response.Results[index].Prices, "Steam")
-			steamPrice, steamErr := h.steam.GetPriceByTitle(r.Context(), response.Results[index].Title, "US")
-			if steamErr != nil {
-				response.Warnings = append(response.Warnings, "No pudimos cargar Steam global.")
-			}
-			if steamPrice != nil && steamPrice.Found {
-				response.Results[index].Prices = append(response.Results[index].Prices, models.StorePrice{StoreName: "Steam", Price: steamPrice.Price, Regular: steamPrice.Regular, Currency: steamPrice.Currency, Discount: steamPrice.Discount, URL: steamPrice.URL, OnSale: steamPrice.Discount > 0})
-			}
-		}
 		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(response.Results[index].Prices, comparisonRate)
 	}
 	h.storeSearch(cacheKey, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *SearchHandler) replaceWithGlobalSteam(ctx context.Context, results []models.GameResult) []string {
+	type lookup struct {
+		index int
+		price *services.SteamPrice
+		err   error
+	}
+	lookups := make([]lookup, len(results))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for worker := 0; worker < min(4, len(results)); worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range jobs {
+				price, err := h.steam.GetPriceByTitle(ctx, results[index].Title, "US")
+				lookups[index] = lookup{index: index, price: price, err: err}
+			}
+		}()
+	}
+	for index := range results {
+		jobs <- index
+	}
+	close(jobs)
+	wg.Wait()
+
+	failed := false
+	for _, item := range lookups {
+		if item.err != nil || item.price == nil || !item.price.Found {
+			failed = true
+			continue
+		}
+		results[item.index].Prices = withoutStore(results[item.index].Prices, "Steam")
+		results[item.index].Prices = append(results[item.index].Prices, models.StorePrice{StoreName: "Steam", Price: item.price.Price, Regular: item.price.Regular, Currency: item.price.Currency, Discount: item.price.Discount, URL: item.price.URL, OnSale: item.price.Discount > 0})
+	}
+	if failed {
+		return []string{"No pudimos cargar Steam global para algunos resultados."}
+	}
+	return nil
 }
 
 func withoutStore(prices []models.StorePrice, storeName string) []models.StorePrice {

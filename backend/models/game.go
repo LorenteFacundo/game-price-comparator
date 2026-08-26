@@ -59,6 +59,7 @@ type SearchResponse struct {
 	Results      []GameResult `json:"results"`
 	USDRate      float64      `json:"usd_rate"`
 	OfficialRate float64      `json:"official_rate"`
+	CardRate     float64      `json:"card_rate"`
 	TaxRate      float64      `json:"tax_rate"`
 	Warnings     []string     `json:"warnings,omitempty"`
 	Error        string       `json:"error,omitempty"`

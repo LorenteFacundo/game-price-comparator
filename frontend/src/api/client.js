@@ -66,10 +66,12 @@ export function displayMoney(price, preferredCurrency, usdRate) {
   return { label: formatMoney(price.price, currency), converted: false }
 }
 
-export function displayFinalMoney(price, preferredCurrency, officialRate, taxRate) {
+export function displayFinalMoney(price, preferredCurrency, officialRate, cardRate, taxRate) {
   const base = displayMoney(price, preferredCurrency, officialRate)
   const currency = price?.currency?.toUpperCase()
-  if (currency !== 'USD' || preferredCurrency !== 'ARS' || officialRate <= 0 || taxRate <= 0) return { ...base, includesTax: false, baseLabel: base.label }
-  const total = price.price * officialRate * (1 + taxRate)
+  if (currency !== 'USD' || preferredCurrency !== 'ARS') return { ...base, includesTax: false, baseLabel: base.label }
+  const totalRate = cardRate > 0 ? cardRate : officialRate * (1 + taxRate)
+  if (totalRate <= 0) return { ...base, includesTax: false, baseLabel: base.label }
+  const total = price.price * totalRate
   return { label: formatMoney(total, 'ARS'), converted: true, includesTax: true, baseLabel: formatMoney(price.price * officialRate, 'ARS') }
 }

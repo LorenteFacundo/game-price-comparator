@@ -1,7 +1,7 @@
 import { displayFinalMoney, formatMoney } from '../api/client'
 
-export default function PriceRow({ price, preferredCurrency, officialRate, taxRate, isBest }) {
-  const shown = displayFinalMoney(price, preferredCurrency, officialRate, taxRate)
+export default function PriceRow({ price, preferredCurrency, officialRate, cardRate, taxRate, isBest }) {
+  const shown = displayFinalMoney(price, preferredCurrency, officialRate, cardRate, taxRate)
   const regular = price.regular > price.price ? formatMoney(price.regular, price.currency) : null
   return (
     <li className={`price-row ${isBest ? 'is-best' : ''}`}>

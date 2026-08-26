@@ -26,7 +26,7 @@ type bluelyticsResponse struct {
 	} `json:"blue"`
 	Official struct {
 		ValueSell float64 `json:"value_sell"`
-	} `json:"official"`
+	} `json:"oficial"`
 }
 
 func NewCurrencyService() *CurrencyService {

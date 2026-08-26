@@ -7,7 +7,7 @@ import RankedGameCard from './components/RankedGameCard'
 import OffersSection from './components/OffersSection'
 import { useLocalStorage } from './hooks/useLocalStorage'
 
-const emptySearch = { results: [], usdRate: 0, officialRate: 0, taxRate: 0, warnings: [] }
+const emptySearch = { results: [], usdRate: 0, officialRate: 0, cardRate: 0, taxRate: 0, warnings: [] }
 
 function savedSearches(items, query) {
   return [query, ...items.filter((item) => item.toLowerCase() !== query.toLowerCase())].slice(0, 6)
@@ -45,7 +45,7 @@ export default function App() {
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     try {
       const data = await searchGames(cleanQuery, mode, controller.signal)
-      setSearch({ results: data.results || [], usdRate: data.usd_rate || 0, officialRate: data.official_rate || 0, taxRate: data.tax_rate || 0, warnings: data.warnings || [] })
+      setSearch({ results: data.results || [], usdRate: data.usd_rate || 0, officialRate: data.official_rate || 0, cardRate: data.card_rate || 0, taxRate: data.tax_rate || 0, warnings: data.warnings || [] })
       setHistory((items) => savedSearches(items, cleanQuery))
     } catch (requestError) {
       if (requestError.name !== 'CanceledError') {
@@ -129,8 +129,8 @@ export default function App() {
 
         {search.results.length > 0 && !loading && <section className="results-section" aria-labelledby="results-title">
           <div className="section-heading"><h2 id="results-title">{query}</h2><span className="heading-note">{search.results.length} juego{search.results.length !== 1 ? 's' : ''}</span></div>
-          <div className="tax-note">{currency === 'ARS' ? `USD: final estimado con IVA ${Math.round(search.taxRate * 100) || 21}% · ARS: precio publicado por tienda` : 'Mostrando precio base en USD'}</div>
-          <div className="results-grid">{search.results.map((game) => <GameCard key={game.id} game={game} currency={currency} officialRate={search.officialRate} taxRate={search.taxRate} isFavorite={favoriteIds.has(game.id)} onToggleFavorite={toggleFavorite} />)}</div>
+          <div className="tax-note">{currency === 'ARS' ? `USD: final estimado con dólar tarjeta · IVA ${Math.round(search.taxRate * 100) || 21}% · ARS: precio publicado por tienda` : 'Mostrando precios base en USD'}</div>
+          <div className="results-grid">{search.results.map((game) => <GameCard key={game.id} game={game} currency={currency} officialRate={search.officialRate} cardRate={search.cardRate} taxRate={search.taxRate} isFavorite={favoriteIds.has(game.id)} onToggleFavorite={toggleFavorite} />)}</div>
         </section>}
 
         {favorites.length > 0 && !search.results.length && <section className="favorites-section" aria-labelledby="favorites-title"><div className="section-heading"><h2 id="favorites-title">Favoritos</h2></div><div className="favorite-list">{favorites.slice(0, 6).map((game) => <button key={game.id} type="button" onClick={() => runSearch(game.title)}><span>★</span>{game.title}<i aria-hidden="true">↗</i></button>)}</div></section>}
