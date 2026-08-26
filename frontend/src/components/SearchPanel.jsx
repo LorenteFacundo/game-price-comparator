@@ -1,4 +1,4 @@
-export default function SearchPanel({ query, onQueryChange, onSearch, loading, currency, onCurrencyChange, steamMode, onSteamModeChange }) {
+export default function SearchPanel({ query, onQueryChange, onSearch, loading, currency, onCurrencyChange }) {
   function submit(event) {
     event.preventDefault()
     if (query.trim()) onSearch(query.trim())
@@ -36,13 +36,6 @@ export default function SearchPanel({ query, onQueryChange, onSearch, loading, c
             {[{ value: 'ARS', label: 'ARS + IMP' }, { value: 'USD', label: 'USD' }].map((option) => (
               <button key={option.value} className={currency === option.value ? 'is-active' : ''} type="button" aria-pressed={currency === option.value} onClick={() => onCurrencyChange(option.value)}>{option.label}</button>
             ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>Steam</legend>
-          <div className="segmented-control">
-            <button className={steamMode === 'regional' ? 'is-active' : ''} type="button" aria-pressed={steamMode === 'regional'} onClick={() => onSteamModeChange('regional')}>Argentina</button>
-            <button className={steamMode === 'global' ? 'is-active' : ''} type="button" aria-pressed={steamMode === 'global'} onClick={() => onSteamModeChange('global')}>Global</button>
           </div>
         </fieldset>
       </div>

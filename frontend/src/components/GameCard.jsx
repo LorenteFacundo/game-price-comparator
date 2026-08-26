@@ -4,8 +4,11 @@ import PriceRow from './PriceRow'
 
 export default function GameCard({ game, currency, officialRate, cardRate, taxRate, isFavorite, onToggleFavorite }) {
   const [expanded, setExpanded] = useState(true)
-  const best = displayFinalMoney(game.best_deal, currency, officialRate, cardRate, taxRate)
-  const priceCount = game.prices?.filter((price) => price.price > 0).length || 0
+  const visiblePrices = (game.prices || []).filter((price) => price.price > 0 && (currency !== 'USD' || price.currency === 'USD'))
+  const bestDeal = currency === 'USD'
+    ? [...visiblePrices].sort((left, right) => left.price - right.price)[0]
+    : game.best_deal
+  const best = displayFinalMoney(bestDeal, currency, officialRate, cardRate, taxRate)
   return (
     <article className="game-card">
       <div className="game-cover">
@@ -16,10 +19,10 @@ export default function GameCard({ game, currency, officialRate, cardRate, taxRa
           <h3>{game.title}</h3>
           <button className={`favorite-button ${isFavorite ? 'is-saved' : ''}`} type="button" aria-label={isFavorite ? `Quitar ${game.title} de favoritos` : `Guardar ${game.title} en favoritos`} aria-pressed={isFavorite} onClick={() => onToggleFavorite(game)}>{isFavorite ? '★' : '☆'}</button>
         </div>
-        {game.best_deal ? <div className="best-summary"><strong>{best.label}</strong><small>{best.note}</small></div> : <p className="muted-copy">Sin precios comparables.</p>}
-        {game.prices?.length > 0 && <button className="show-prices" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? 'Ocultar' : `Ver ${priceCount} tiendas`} <span aria-hidden="true">{expanded ? '−' : '+'}</span></button>}
+        {bestDeal ? <div className="best-summary"><strong>{best.label}</strong><small>{best.note}</small></div> : <p className="muted-copy">Sin precio publicado en USD.</p>}
+        {visiblePrices.length > 0 && <button className="show-prices" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? 'Ocultar' : `Ver ${visiblePrices.length} tiendas`} <span aria-hidden="true">{expanded ? '−' : '+'}</span></button>}
       </div>
-      {expanded && game.prices?.length > 0 && <ul className="price-list">{game.prices.map((price) => <PriceRow key={`${price.store_name}-${price.url}`} price={price} preferredCurrency={currency} officialRate={officialRate} cardRate={cardRate} taxRate={taxRate} isBest={game.best_deal?.store_name === price.store_name && game.best_deal?.url === price.url} />)}</ul>}
+      {expanded && visiblePrices.length > 0 && <ul className="price-list">{visiblePrices.map((price) => <PriceRow key={`${price.store_name}-${price.url}`} price={price} preferredCurrency={currency} officialRate={officialRate} cardRate={cardRate} taxRate={taxRate} isBest={bestDeal?.store_name === price.store_name && bestDeal?.url === price.url} />)}</ul>}
     </article>
   )
 }

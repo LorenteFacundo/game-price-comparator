@@ -24,13 +24,12 @@ export default function App() {
   const [discoverLoading, setDiscoverLoading] = useState(true)
   const [error, setError] = useState('')
   const [currency, setCurrency] = useLocalStorage('pricepulse-currency', 'ARS')
-  const [steamMode, setSteamMode] = useLocalStorage('pricepulse-steam-mode', 'regional')
   const [favorites, setFavorites] = useLocalStorage('pricepulse-favorites', [])
   const [history, setHistory] = useLocalStorage('pricepulse-history', [])
   const requestRef = useRef(null)
   const restoredSearchRef = useRef(false)
 
-  const runSearch = useCallback(async (nextQuery, mode = steamMode) => {
+  const runSearch = useCallback(async (nextQuery) => {
     const cleanQuery = nextQuery.trim()
     if (!cleanQuery) return
     requestRef.current?.abort()
@@ -41,10 +40,10 @@ export default function App() {
     setQuery(cleanQuery)
     const params = new URLSearchParams(window.location.search)
     params.set('q', cleanQuery)
-    params.set('steam', mode)
+    params.delete('steam')
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     try {
-      const data = await searchGames(cleanQuery, mode, controller.signal)
+      const data = await searchGames(cleanQuery, controller.signal)
       setSearch({ results: data.results || [], usdRate: data.usd_rate || 0, officialRate: data.official_rate || 0, cardRate: data.card_rate || 0, taxRate: data.tax_rate || 0, warnings: data.warnings || [] })
       setHistory((items) => savedSearches(items, cleanQuery))
     } catch (requestError) {
@@ -55,7 +54,7 @@ export default function App() {
     } finally {
       if (requestRef.current === controller) setLoading(false)
     }
-  }, [setHistory, steamMode])
+  }, [setHistory])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -72,25 +71,17 @@ export default function App() {
   useEffect(() => {
     if (restoredSearchRef.current) return undefined
     restoredSearchRef.current = true
-    const requestedMode = new URLSearchParams(window.location.search).get('steam')
-    const initialMode = requestedMode === 'regional' || requestedMode === 'global' ? requestedMode : steamMode
-    if (initialMode !== steamMode) setSteamMode(initialMode)
     const startupSearch = initialQuery
-      ? window.setTimeout(() => runSearch(initialQuery, initialMode), 0)
+      ? window.setTimeout(() => runSearch(initialQuery), 0)
       : null
     // The timer intentionally survives React Strict Mode's development remount,
     // so a shared URL is restored exactly once.
     void startupSearch
     return undefined
-  }, [initialQuery, runSearch, setSteamMode, steamMode])
+  }, [initialQuery, runSearch])
 
   function toggleFavorite(game) {
     setFavorites((items) => items.some((item) => item.id === game.id) ? items.filter((item) => item.id !== game.id) : [game, ...items].slice(0, 24))
-  }
-
-  function changeSteamMode(mode) {
-    setSteamMode(mode)
-    if (search.results.length && query) runSearch(query, mode)
   }
 
   const favoriteIds = new Set(favorites.map((game) => game.id))
@@ -107,7 +98,7 @@ export default function App() {
       </header>
 
       <main id="content">
-        <SearchPanel query={query} onQueryChange={setQuery} onSearch={runSearch} loading={loading} currency={currency} onCurrencyChange={setCurrency} steamMode={steamMode} onSteamModeChange={changeSteamMode} />
+        <SearchPanel query={query} onQueryChange={setQuery} onSearch={runSearch} loading={loading} currency={currency} onCurrencyChange={setCurrency} />
 
         {history.length > 0 && !search.results.length && <section className="recent-searches" aria-label="Búsquedas recientes"><span>Volver a buscar:</span>{history.map((item) => <button type="button" key={item} onClick={() => runSearch(item)}>{item}</button>)}</section>}
 
@@ -132,7 +123,7 @@ export default function App() {
 
         {search.results.length > 0 && !loading && <section className="results-section" aria-labelledby="results-title">
           <div className="section-heading"><h2 id="results-title">{query}</h2><span className="heading-note">{search.results.length} juego{search.results.length !== 1 ? 's' : ''}</span></div>
-          <div className="tax-note">{currency === 'ARS' ? `ARS + IMP · USD × ${formattedCardRate} (oficial ${formattedOfficialRate} + IVA ${taxPercent}%) = total final. ARS regional no se reconvierte.` : `USD · Precio regional de Argentina. ARS se muestra como equivalente al dólar tarjeta ${formattedCardRate}; USD publicado no se convierte.`}</div>
+          <div className="tax-note">{currency === 'ARS' ? `ARS + IMP · USD × ${formattedCardRate} (oficial ${formattedOfficialRate} + IVA ${taxPercent}%) = total final. ARS regional no se reconvierte.` : 'USD · Sólo precios publicados en USD para Argentina. No se convierte ningún precio.'}</div>
           <div className="results-grid">{search.results.map((game) => <GameCard key={game.id} game={game} currency={currency} officialRate={search.officialRate} cardRate={search.cardRate} taxRate={search.taxRate} isFavorite={favoriteIds.has(game.id)} onToggleFavorite={toggleFavorite} />)}</div>
         </section>}
 

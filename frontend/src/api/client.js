@@ -9,9 +9,9 @@ function messageFrom(error, fallback) {
   return error.response?.data?.error || error.message || fallback
 }
 
-export async function searchGames(query, steamMode, signal) {
+export async function searchGames(query, signal) {
   try {
-    const { data } = await api.get('/api/search', { params: { q: query, steam_mode: steamMode }, signal })
+    const { data } = await api.get('/api/search', { params: { q: query }, signal })
     return data
   } catch (error) {
     if (axios.isCancel(error)) throw error
@@ -63,9 +63,7 @@ export function displayFinalMoney(price, preferredCurrency, officialRate, cardRa
   const totalRate = cardRate > 0 ? cardRate : officialRate * (1 + taxRate)
 
   if (preferredCurrency === 'USD') {
-    if (currency === 'USD') return { label: formatMoney(price.price, 'USD'), converted: false, includesTax: false, note: 'precio regional publicado en USD' }
-    if (currency === 'ARS' && totalRate > 0) return { label: formatMoney(price.price / totalRate, 'USD'), converted: true, includesTax: false, note: 'equivalente regional al dólar tarjeta' }
-    return { label: formatMoney(price.price, currency), converted: false, includesTax: false, note: 'cotización no disponible' }
+    return { label: formatMoney(price.price, 'USD'), converted: false, includesTax: false, note: 'precio publicado en USD' }
   }
 
   if (currency === 'ARS') return { label: formatMoney(price.price, 'ARS'), converted: false, includesTax: false, note: 'precio regional publicado · no se reconvierte' }

@@ -17,18 +17,6 @@ const results = {
   }],
 }
 
-const globalResults = {
-  ...results,
-  results: [{
-    ...results.results[0],
-    best_deal: { store_name: 'Steam', price: 24.99, regular: 24.99, currency: 'USD', discount_percent: 0, url: 'https://store.steampowered.com/app/1145360/', on_sale: false, is_regional: false },
-    prices: [
-      { store_name: 'Steam', price: 24.99, regular: 24.99, currency: 'USD', discount_percent: 0, url: 'https://store.steampowered.com/app/1145360/', on_sale: false, is_regional: false },
-      results.results[0].prices[1],
-    ],
-  }],
-}
-
 const deals = {
   featured: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', score: 84, reasons: ['96% positivas', 'Mínimo histórico'] }],
   free: [{ id: 'deal-2', title: 'Free Favorite', image_url: '', store_name: 'Steam', price: 0, regular: 20, currency: 'USD', discount_percent: 100, url: 'https://store.steampowered.com/', score: 72, reasons: ['Gratis ahora'] }],
@@ -42,7 +30,7 @@ const discover = {
 async function mockAPI(page) {
   await page.route('**/api/deals**', (route) => route.fulfill({ json: deals }))
   await page.route('**/api/discover**', (route) => route.fulfill({ json: discover }))
-  await page.route('**/api/search**', (route) => route.fulfill({ json: route.request().url().includes('steam_mode=global') ? globalResults : results }))
+  await page.route('**/api/search**', (route) => route.fulfill({ json: results }))
 }
 
 test('search is shareable and shows only the real regional Steam price', async ({ page }) => {
@@ -56,14 +44,14 @@ test('search is shareable and shows only the real regional Steam price', async (
   await expect(page.getByText('$\u00a014.505').first()).toBeVisible()
 })
 
-test('currency and Steam location controls update the rendered price', async ({ page }) => {
+test('currency controls keep USD prices in dollars and ARS prices with taxes', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/?q=Hades&steam=regional')
   await expect(page.getByRole('button', { name: 'ARS + IMP', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'USD', exact: true }).click()
   await expect(page.getByText('$9.99').first()).toBeVisible()
-  await page.getByRole('button', { name: 'Global', exact: true }).click()
-  await expect(page.getByText('$24.99').first()).toBeVisible()
+  await expect(page.getByText('USD · Sólo precios publicados en USD para Argentina. No se convierte ningún precio.')).toBeVisible()
+  await expect(page.getByText('Steam', { exact: true })).not.toBeVisible()
 })
 
 test('Steam rankings open a price comparison', async ({ page }) => {
