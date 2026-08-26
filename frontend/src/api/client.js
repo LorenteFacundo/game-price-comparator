@@ -21,8 +21,13 @@ export async function searchGames(query, steamMode, signal) {
 
 export async function getDeals(signal) {
   try {
-    const { data } = await api.get('/api/deals', { params: { limit: 12 }, signal })
-    return data.deals || []
+    const { data } = await api.get('/api/deals', { params: { limit: 12 }, signal, timeout: 19500 })
+    return {
+      featured: data.featured || [],
+      free: data.free || [],
+      discounts: data.discounts || [],
+      warnings: data.warnings || [],
+    }
   } catch (error) {
     if (axios.isCancel(error)) throw error
     throw new Error(messageFrom(error, 'No pudimos cargar las ofertas.'), { cause: error })

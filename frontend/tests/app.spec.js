@@ -16,7 +16,11 @@ const results = {
   }],
 }
 
-const deals = { deals: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', is_near_low: true }] }
+const deals = {
+  featured: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', score: 84, reasons: ['96% positivas', 'Mínimo histórico'] }],
+  free: [{ id: 'deal-2', title: 'Free Favorite', image_url: '', store_name: 'Steam', price: 0, regular: 20, currency: 'USD', discount_percent: 100, url: 'https://store.steampowered.com/', score: 72, reasons: ['Gratis ahora'] }],
+  discounts: [{ id: 'deal-3', title: 'Deep Discount', image_url: '', store_name: 'Microsoft Store', price: 2, regular: 20, currency: 'USD', discount_percent: 90, url: 'https://www.microsoft.com/', score: 50, reasons: [] }],
+}
 const discover = {
   popular: [{ id: '730', title: 'Counter-Strike 2', image_url: '', steam_url: 'https://store.steampowered.com/app/730/', rank: 1 }],
   most_played: [{ id: '570', title: 'Dota 2', image_url: '', steam_url: 'https://store.steampowered.com/app/570/', rank: 2, players: 800000 }],
@@ -45,6 +49,16 @@ test('Steam rankings open a price comparison', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Más jugados en Steam' })).toBeVisible()
   await page.getByRole('button', { name: /comparar precios de counter-strike 2/i }).click()
   await expect(page.getByRole('heading', { name: 'Counter-Strike 2', exact: true })).toBeVisible()
+})
+
+test('offers switch between curated, free and biggest discount views', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Balatro' })).toBeVisible()
+  await page.getByRole('tab', { name: /gratis ahora/i }).click()
+  await expect(page.getByRole('button', { name: 'Free Favorite' })).toBeVisible()
+  await page.getByRole('tab', { name: /más descuento/i }).click()
+  await expect(page.getByRole('button', { name: 'Deep Discount' })).toBeVisible()
 })
 
 test('mobile layout has no horizontal overflow', async ({ page }) => {

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getDeals, getDiscover, searchGames } from './api/client'
-import DealCard from './components/DealCard'
 import Footer from './components/Footer'
 import GameCard from './components/GameCard'
 import SearchPanel from './components/SearchPanel'
 import RankedGameCard from './components/RankedGameCard'
+import OffersSection from './components/OffersSection'
 import { useLocalStorage } from './hooks/useLocalStorage'
 
 const emptySearch = { results: [], usdRate: 0, officialRate: 0, taxRate: 0, warnings: [] }
@@ -18,7 +18,7 @@ export default function App() {
   const [query, setQuery] = useState(initialQuery)
   const [search, setSearch] = useState(emptySearch)
   const [loading, setLoading] = useState(false)
-  const [deals, setDeals] = useState([])
+  const [deals, setDeals] = useState({ featured: [], free: [], discounts: [], warnings: [] })
   const [dealsLoading, setDealsLoading] = useState(true)
   const [discover, setDiscover] = useState({ popular: [], mostPlayed: [] })
   const [discoverLoading, setDiscoverLoading] = useState(true)
@@ -59,7 +59,7 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    getDeals(controller.signal).then(setDeals).catch(() => setDeals([])).finally(() => setDealsLoading(false))
+    getDeals(controller.signal).then(setDeals).catch(() => setDeals({ featured: [], free: [], discounts: [], warnings: [] })).finally(() => setDealsLoading(false))
     return () => controller.abort()
   }, [])
 
@@ -122,10 +122,7 @@ export default function App() {
             {discoverLoading ? <div className="rank-grid" aria-label="Cargando más jugados">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : discover.mostPlayed.length > 0 && <div className="rank-grid">{discover.mostPlayed.map((game) => <RankedGameCard key={game.id} game={game} onSearch={runSearch} showPlayers />)}</div>}
           </section>
 
-          <section className="deals-section" aria-labelledby="deals-title">
-          <div className="section-heading"><h2 id="deals-title">Ofertas</h2></div>
-          {dealsLoading ? <div className="deal-grid" aria-label="Cargando ofertas">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : deals.length ? <div className="deal-grid">{deals.map((deal) => <DealCard key={deal.id} deal={deal} onSearch={runSearch} />)}</div> : <div className="empty-panel"><h2>Sin ofertas por ahora.</h2></div>}
-          </section>
+          <OffersSection deals={deals} loading={dealsLoading} onSearch={runSearch} />
         </>}
 
         {loading && <div className="search-loading" role="status" aria-live="polite"><span className="pulse-dot" /><span>Buscando precios…</span></div>}

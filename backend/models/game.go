@@ -24,18 +24,25 @@ type GameResult struct {
 }
 
 type FeaturedDeal struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	ImageURL   string  `json:"image_url"`
-	StoreName  string  `json:"store_name"`
-	Price      float64 `json:"price"`
-	Regular    float64 `json:"regular"`
-	Currency   string  `json:"currency"`
-	Discount   int     `json:"discount_percent"`
-	URL        string  `json:"url"`
-	ExpiresAt  string  `json:"expires_at,omitempty"`
-	HistoryLow float64 `json:"history_low,omitempty"`
-	IsNearLow  bool    `json:"is_near_low"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	ImageURL    string   `json:"image_url"`
+	StoreName   string   `json:"store_name"`
+	Price       float64  `json:"price"`
+	Regular     float64  `json:"regular"`
+	Currency    string   `json:"currency"`
+	Discount    int      `json:"discount_percent"`
+	URL         string   `json:"url"`
+	ExpiresAt   string   `json:"expires_at,omitempty"`
+	HistoryLow  float64  `json:"history_low,omitempty"`
+	IsNearLow   bool     `json:"is_near_low"`
+	Score       float64  `json:"score"`
+	SteamAppID  string   `json:"steam_app_id,omitempty"`
+	ReviewPct   int      `json:"review_percent,omitempty"`
+	ReviewCount int      `json:"review_count,omitempty"`
+	PopularRank int      `json:"popular_rank,omitempty"`
+	Players     int      `json:"players,omitempty"`
+	Reasons     []string `json:"reasons,omitempty"`
 }
 
 type RankedGame struct {
@@ -58,9 +65,11 @@ type SearchResponse struct {
 }
 
 type DealsResponse struct {
-	Deals    []FeaturedDeal `json:"deals"`
-	Warnings []string       `json:"warnings,omitempty"`
-	Error    string         `json:"error,omitempty"`
+	Featured  []FeaturedDeal `json:"featured"`
+	Free      []FeaturedDeal `json:"free"`
+	Discounts []FeaturedDeal `json:"discounts"`
+	Warnings  []string       `json:"warnings,omitempty"`
+	Error     string         `json:"error,omitempty"`
 }
 
 type DiscoverResponse struct {

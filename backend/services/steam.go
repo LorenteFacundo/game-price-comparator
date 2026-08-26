@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -29,6 +30,105 @@ type SteamTopSeller struct {
 	Image string
 	Rank  int
 }
+
+func (s *SteamService) GetDealSignals(ctx context.Context, deals []models.FeaturedDeal, popular []SteamTopSeller, mostPlayed []models.RankedGame) map[string]SteamDealSignal {
+	popularByTitle := make(map[string]SteamTopSeller, len(popular))
+	playedByTitle := make(map[string]models.RankedGame, len(mostPlayed))
+	for _, game := range popular {
+		popularByTitle[normalizeGameTitle(game.Title)] = game
+	}
+	for _, game := range mostPlayed {
+		playedByTitle[normalizeGameTitle(game.Title)] = game
+	}
+
+	deals = selectDealsForSignals(deals, popularByTitle, playedByTitle, 24)
+	result := make(map[string]SteamDealSignal, len(deals))
+	var mu sync.Mutex
+	jobs := make(chan models.FeaturedDeal)
+	var wg sync.WaitGroup
+	for worker := 0; worker < 6; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for deal := range jobs {
+				key := normalizeGameTitle(deal.Title)
+				signal := SteamDealSignal{}
+				if game, ok := popularByTitle[key]; ok {
+					signal.AppID, signal.PopularRank = game.AppID, game.Rank
+				}
+				if game, ok := playedByTitle[key]; ok {
+					signal.AppID, signal.Players = game.ID, game.Players
+				}
+				if signal.AppID == "" {
+					signal.AppID, _ = s.searchExactAppID(ctx, deal.Title)
+				}
+				if signal.AppID != "" {
+					signal.ReviewPct, signal.ReviewCount, _ = s.getReviewSummary(ctx, signal.AppID)
+				}
+				mu.Lock()
+				result[deal.ID] = signal
+				mu.Unlock()
+			}
+		}()
+	}
+	for _, deal := range deals {
+		jobs <- deal
+	}
+	close(jobs)
+	wg.Wait()
+	return result
+}
+
+func selectDealsForSignals(deals []models.FeaturedDeal, popular map[string]SteamTopSeller, played map[string]models.RankedGame, limit int) []models.FeaturedDeal {
+	if len(deals) <= limit {
+		return deals
+	}
+	selected := make([]models.FeaturedDeal, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	add := func(deal models.FeaturedDeal) {
+		if len(selected) >= limit {
+			return
+		}
+		if _, ok := seen[deal.ID]; ok {
+			return
+		}
+		selected = append(selected, deal)
+		seen[deal.ID] = struct{}{}
+	}
+	for _, deal := range deals {
+		key := normalizeGameTitle(deal.Title)
+		if _, ok := popular[key]; ok {
+			add(deal)
+			continue
+		}
+		if _, ok := played[key]; ok {
+			add(deal)
+		}
+	}
+	for _, deal := range deals {
+		if deal.Price == 0 && len(selected) < 6 {
+			add(deal)
+		}
+	}
+	paid := make([]models.FeaturedDeal, 0, len(deals))
+	for _, deal := range deals {
+		if deal.Price > 0 {
+			paid = append(paid, deal)
+		}
+	}
+	remaining := limit - len(selected)
+	if remaining > 0 && len(paid) > 0 {
+		step := math.Max(1, float64(len(paid))/float64(remaining))
+		for cursor := 0.0; int(cursor) < len(paid) && len(selected) < limit; cursor += step {
+			add(paid[int(cursor)])
+		}
+	}
+	for _, deal := range deals {
+		add(deal)
+	}
+	return selected
+}
+
 type steamResponse map[string]struct {
 	Success bool `json:"success"`
 	Data    struct {
@@ -259,4 +359,66 @@ func (s *SteamService) searchAppID(ctx context.Context, title string) (string, e
 		}
 	}
 	return fmt.Sprintf("%d", result.Items[0].ID), nil
+}
+
+func (s *SteamService) searchExactAppID(ctx context.Context, title string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://store.steampowered.com/api/storesearch?term=%s&l=spanish&cc=AR", url.QueryEscape(title)), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("búsqueda Steam respondió con status %d", resp.StatusCode)
+	}
+	var result struct {
+		Items []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	target := canonicalDealTitle(title)
+	for _, item := range result.Items {
+		if item.ID != 0 && canonicalDealTitle(item.Name) == target {
+			return fmt.Sprintf("%d", item.ID), nil
+		}
+	}
+	return "", nil
+}
+
+func (s *SteamService) getReviewSummary(ctx context.Context, appID string) (int, int, error) {
+	endpoint := fmt.Sprintf("https://store.steampowered.com/appreviews/%s?json=1&language=all&purchase_type=all&num_per_page=0", url.QueryEscape(appID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("reseñas Steam respondió con status %d", resp.StatusCode)
+	}
+	var payload struct {
+		QuerySummary struct {
+			TotalPositive int `json:"total_positive"`
+			TotalReviews  int `json:"total_reviews"`
+		} `json:"query_summary"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return 0, 0, err
+	}
+	if payload.QuerySummary.TotalReviews == 0 {
+		return 0, 0, nil
+	}
+	pct := int(math.Round(float64(payload.QuerySummary.TotalPositive) / float64(payload.QuerySummary.TotalReviews) * 100))
+	return pct, payload.QuerySummary.TotalReviews, nil
 }

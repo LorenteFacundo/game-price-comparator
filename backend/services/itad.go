@@ -105,14 +105,14 @@ func (s *ITADService) Search(ctx context.Context, query string) ([]models.GameRe
 
 func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.FeaturedDeal, error) {
 	if limit < 1 {
-		limit = 12
+		limit = 60
 	}
-	if limit > 24 {
-		limit = 24
+	if limit > 100 {
+		limit = 100
 	}
 	// Pedimos una muestra amplia porque ITAD ordena por descuento y las primeras
 	// posiciones suelen ser juegos gratuitos con 100% de descuento.
-	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=100&sort=-cut", itadBaseURL), nil)
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=200&sort=-cut", itadBaseURL), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,10 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 		}
 		candidates = append(candidates, deal)
 	}
-	return selectFeaturedDeals(candidates, limit), nil
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	return candidates, nil
 }
 
 func (s *ITADService) searchGames(ctx context.Context, query string) ([]itadSearchResult, error) {
@@ -201,48 +204,4 @@ func isFeaturedStore(storeName string) bool {
 
 func isEligibleFeaturedDeal(deal itadDeal) bool {
 	return isFeaturedStore(deal.Shop.Name) && deal.Cut > 0
-}
-
-func selectFeaturedDeals(candidates []models.FeaturedDeal, limit int) []models.FeaturedDeal {
-	if limit < 1 {
-		return []models.FeaturedDeal{}
-	}
-	free := make([]models.FeaturedDeal, 0, len(candidates))
-	paid := make([]models.FeaturedDeal, 0, len(candidates))
-	for _, deal := range candidates {
-		if deal.Price == 0 {
-			free = append(free, deal)
-		} else {
-			paid = append(paid, deal)
-		}
-	}
-
-	selected := make([]models.FeaturedDeal, 0, limit)
-	for len(selected) < limit && (len(free) > 0 || len(paid) > 0) {
-		// Intercalamos un juego gratis y hasta dos ofertas pagas para que
-		// convivan los regalos con descuentos del 10%, 30%, 50%, etc.
-		if len(free) > 0 {
-			selected = append(selected, free[0])
-			free = free[1:]
-		}
-		for index := 0; index < 2 && len(selected) < limit && len(paid) > 0; index++ {
-			selected = append(selected, paid[0])
-			paid = paid[1:]
-		}
-		if len(free) == 0 {
-			selected = append(selected, paid...)
-			if len(selected) > limit {
-				selected = selected[:limit]
-			}
-			break
-		}
-		if len(paid) == 0 {
-			selected = append(selected, free...)
-			if len(selected) > limit {
-				selected = selected[:limit]
-			}
-			break
-		}
-	}
-	return selected
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -134,12 +135,43 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
-	deals, err := h.itad.GetDeals(r.Context(), limit)
+	type dealsResult struct {
+		deals []models.FeaturedDeal
+		err   error
+	}
+	type popularResult struct {
+		games []services.SteamTopSeller
+		err   error
+	}
+	dealsChannel := make(chan dealsResult, 1)
+	popularChannel := make(chan popularResult, 1)
+	go func() {
+		deals, err := h.itad.GetDeals(r.Context(), 80)
+		dealsChannel <- dealsResult{deals: deals, err: err}
+	}()
+	go func() {
+		games, err := h.steam.GetTopSellers(r.Context(), 30)
+		popularChannel <- popularResult{games: games, err: err}
+	}()
+	loadedDeals := <-dealsChannel
+	loadedPopular := <-popularChannel
+	deals, err := loadedDeals.deals, loadedDeals.err
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
 		return
 	}
-	response := models.DealsResponse{Deals: deals}
+	popular, popularErr := loadedPopular.games, loadedPopular.err
+	mostPlayed := []models.RankedGame{}
+	if discover, ok := h.cachedDiscoverResponse(); ok {
+		mostPlayed = discover.MostPlayed
+	}
+	signalContext, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	signals := h.steam.GetDealSignals(signalContext, deals, popular, mostPlayed)
+	cancel()
+	response := services.RankDeals(deals, signals, limit)
+	if popularErr != nil {
+		response.Warnings = append(response.Warnings, "No pudimos sumar el ranking de ventas de Steam.")
+	}
 	h.storeDeals(limit, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, response)
