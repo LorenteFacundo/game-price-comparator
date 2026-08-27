@@ -22,7 +22,7 @@ func TestRankDealsSeparatesFreeAndRewardsRelevantGames(t *testing.T) {
 	if len(result.Free) != 1 || result.Free[0].ID != "free" {
 		t.Fatalf("expected the free game in its own collection, got %+v", result.Free)
 	}
-	if len(result.Featured) < 2 || result.Featured[0].ID != "known" {
+	if len(result.Featured) == 0 || result.Featured[0].ID != "known" {
 		t.Fatalf("expected the acclaimed popular game first, got %+v", result.Featured)
 	}
 	if result.Discounts[0].ID != "obscure" {
@@ -35,12 +35,43 @@ func TestRankDealsSeparatesFreeAndRewardsRelevantGames(t *testing.T) {
 
 func TestRankDealsDeduplicatesEditions(t *testing.T) {
 	deals := []models.FeaturedDeal{
-		{ID: "base", Title: "Hades", Price: 10, Discount: 50},
-		{ID: "deluxe", Title: "Hades Deluxe Edition", Price: 12, Discount: 60},
+		{ID: "base", Title: "Hades", Price: 10, Discount: 50, SteamFeatured: true},
+		{ID: "deluxe", Title: "Hades Deluxe Edition", Price: 12, Discount: 60, SteamFeatured: true},
 	}
-	result := RankDeals(deals, nil, 12)
+	result := RankDeals(deals, map[string]SteamDealSignal{
+		"base":   {ReviewPct: 98, ReviewCount: 10000},
+		"deluxe": {ReviewPct: 98, ReviewCount: 10000},
+	}, 12)
 	if len(result.Featured) != 1 {
 		t.Fatalf("expected one Hades edition in featured, got %+v", result.Featured)
+	}
+}
+
+func TestRankDealsUsesITADPopularityAsATopTierSignal(t *testing.T) {
+	result := RankDeals([]models.FeaturedDeal{{ID: "catalog", Title: "Top Catalog Game", Price: 20, Discount: 20, ITADPopularRank: 4}}, nil, 12)
+	if len(result.Featured) != 1 || result.Featured[0].ID != "catalog" {
+		t.Fatalf("expected popular catalog game in featured, got %+v", result.Featured)
+	}
+}
+
+func TestRankDealsExcludesObscureHighDiscountFromFeatured(t *testing.T) {
+	deals := []models.FeaturedDeal{
+		{ID: "top", Title: "Clair Obscur: Expedition 33", Price: 30, Discount: 20},
+		{ID: "random", Title: "Random Word Game 2", Price: 1, Discount: 95, IsNearLow: true},
+		{ID: "poorly-rated", Title: "Popular but Poorly Rated Game", Price: 10, Discount: 75},
+	}
+	signals := map[string]SteamDealSignal{
+		"top":          {ReviewPct: 96, ReviewCount: 70000},
+		"random":       {ReviewPct: 59, ReviewCount: 40},
+		"poorly-rated": {ReviewPct: 64, ReviewCount: 10000},
+	}
+
+	result := RankDeals(deals, signals, 12)
+	if len(result.Featured) != 1 || result.Featured[0].ID != "top" {
+		t.Fatalf("expected only the high-signal game in featured, got %+v", result.Featured)
+	}
+	if len(result.Discounts) != 3 || result.Discounts[0].ID != "random" {
+		t.Fatalf("expected the raw discount list to retain the 95%% game, got %+v", result.Discounts)
 	}
 }
 
@@ -71,5 +102,26 @@ func TestSelectDealsForSignalsSamplesAcrossDiscountRange(t *testing.T) {
 	}
 	if selected[len(selected)-1].Discount > 40 {
 		t.Fatalf("expected lower discounts to be sampled, got %+v", selected)
+	}
+}
+
+func TestSelectDealsForSignalsReservesChecksForCatalogPopularGames(t *testing.T) {
+	deals := make([]models.FeaturedDeal, 0, 27)
+	for index := 0; index < 24; index++ {
+		deals = append(deals, models.FeaturedDeal{ID: fmt.Sprintf("steam-%d", index), Title: fmt.Sprintf("Steam deal %d", index), SteamFeatured: true})
+	}
+	for index := 0; index < 3; index++ {
+		deals = append(deals, models.FeaturedDeal{ID: fmt.Sprintf("catalog-%d", index), Title: fmt.Sprintf("Catalog deal %d", index), ITADPopularRank: index + 1})
+	}
+
+	selected := selectDealsForSignals(deals, nil, nil, 24)
+	selectedIDs := make(map[string]bool, len(selected))
+	for _, deal := range selected {
+		selectedIDs[deal.ID] = true
+	}
+	for index := 0; index < 3; index++ {
+		if !selectedIDs[fmt.Sprintf("catalog-%d", index)] {
+			t.Fatalf("expected popular catalog game %d to be included, got %+v", index, selected)
+		}
 	}
 }

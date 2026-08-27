@@ -24,25 +24,27 @@ type GameResult struct {
 }
 
 type FeaturedDeal struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	ImageURL    string   `json:"image_url"`
-	StoreName   string   `json:"store_name"`
-	Price       float64  `json:"price"`
-	Regular     float64  `json:"regular"`
-	Currency    string   `json:"currency"`
-	Discount    int      `json:"discount_percent"`
-	URL         string   `json:"url"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	HistoryLow  float64  `json:"history_low,omitempty"`
-	IsNearLow   bool     `json:"is_near_low"`
-	Score       float64  `json:"score"`
-	SteamAppID  string   `json:"steam_app_id,omitempty"`
-	ReviewPct   int      `json:"review_percent,omitempty"`
-	ReviewCount int      `json:"review_count,omitempty"`
-	PopularRank int      `json:"popular_rank,omitempty"`
-	Players     int      `json:"players,omitempty"`
-	Reasons     []string `json:"reasons,omitempty"`
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	ImageURL        string   `json:"image_url"`
+	StoreName       string   `json:"store_name"`
+	Price           float64  `json:"price"`
+	Regular         float64  `json:"regular"`
+	Currency        string   `json:"currency"`
+	Discount        int      `json:"discount_percent"`
+	URL             string   `json:"url"`
+	ExpiresAt       string   `json:"expires_at,omitempty"`
+	HistoryLow      float64  `json:"history_low,omitempty"`
+	IsNearLow       bool     `json:"is_near_low"`
+	Score           float64  `json:"score"`
+	SteamAppID      string   `json:"steam_app_id,omitempty"`
+	ReviewPct       int      `json:"review_percent,omitempty"`
+	ReviewCount     int      `json:"review_count,omitempty"`
+	PopularRank     int      `json:"popular_rank,omitempty"`
+	ITADPopularRank int      `json:"itad_popular_rank,omitempty"`
+	Players         int      `json:"players,omitempty"`
+	SteamFeatured   bool     `json:"is_steam_featured,omitempty"`
+	Reasons         []string `json:"reasons,omitempty"`
 }
 
 type RankedGame struct {

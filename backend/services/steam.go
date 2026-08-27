@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,28 @@ type SteamTopSeller struct {
 	Rank  int
 }
 
+type steamFeaturedItem struct {
+	ID                 int    `json:"id"`
+	Type               int    `json:"type"`
+	Name               string `json:"name"`
+	HeaderImage        string `json:"header_image"`
+	LargeCapsuleImage  string `json:"large_capsule_image"`
+	Currency           string `json:"currency"`
+	FinalPrice         int    `json:"final_price"`
+	OriginalPrice      int    `json:"original_price"`
+	DiscountPercent    int    `json:"discount_percent"`
+	DiscountExpiration int64  `json:"discount_expiration"`
+}
+
+type steamFeaturedCategory struct {
+	Items []steamFeaturedItem `json:"items"`
+}
+
+type steamFeaturedCategories struct {
+	Specials   steamFeaturedCategory `json:"specials"`
+	TopSellers steamFeaturedCategory `json:"top_sellers"`
+}
+
 func (s *SteamService) GetDealSignals(ctx context.Context, deals []models.FeaturedDeal, popular []SteamTopSeller, mostPlayed []models.RankedGame) map[string]SteamDealSignal {
 	popularByTitle := make(map[string]SteamTopSeller, len(popular))
 	playedByTitle := make(map[string]models.RankedGame, len(mostPlayed))
@@ -52,7 +75,7 @@ func (s *SteamService) GetDealSignals(ctx context.Context, deals []models.Featur
 			defer wg.Done()
 			for deal := range jobs {
 				key := normalizeGameTitle(deal.Title)
-				signal := SteamDealSignal{}
+				signal := SteamDealSignal{AppID: deal.SteamAppID}
 				if game, ok := popularByTitle[key]; ok {
 					signal.AppID, signal.PopularRank = game.AppID, game.Rank
 				}
@@ -64,6 +87,13 @@ func (s *SteamService) GetDealSignals(ctx context.Context, deals []models.Featur
 				}
 				if signal.AppID != "" {
 					signal.ReviewPct, signal.ReviewCount, _ = s.getReviewSummary(ctx, signal.AppID)
+					if deal.ImageURL == "" {
+						if appID, err := strconv.Atoi(signal.AppID); err == nil {
+							if game, ok := s.getBasicGame(ctx, appID); ok {
+								signal.ImageURL = game.ImageURL
+							}
+						}
+					}
 				}
 				mu.Lock()
 				result[deal.ID] = signal
@@ -94,6 +124,27 @@ func selectDealsForSignals(deals []models.FeaturedDeal, popular map[string]Steam
 		}
 		selected = append(selected, deal)
 		seen[deal.ID] = struct{}{}
+	}
+	// No dejamos que el carrusel de Steam consuma toda la muestra: los juegos
+	// que ITAD marca como populares suelen aportar ofertas grandes con rebajas
+	// más moderadas (por ejemplo, lanzamientos aclamados).
+	steamFeaturedBudget := min(limit, 12)
+	for _, deal := range deals {
+		if len(selected) >= steamFeaturedBudget {
+			break
+		}
+		if deal.SteamFeatured {
+			add(deal)
+		}
+	}
+	catalogPopularBudget := min(limit, steamFeaturedBudget+12)
+	for _, deal := range deals {
+		if len(selected) >= catalogPopularBudget {
+			break
+		}
+		if deal.ITADPopularRank > 0 {
+			add(deal)
+		}
 	}
 	for _, deal := range deals {
 		key := normalizeGameTitle(deal.Title)
@@ -156,30 +207,9 @@ func (s *SteamService) GetTopSellers(ctx context.Context, limit int) ([]SteamTop
 	if limit < 1 {
 		limit = 24
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://store.steampowered.com/api/featuredcategories?cc=AR&l=spanish", nil)
+	payload, err := s.getFeaturedCategories(ctx)
 	if err != nil {
 		return nil, err
-	}
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("consultando populares de Steam: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("populares de Steam respondió con status %d", resp.StatusCode)
-	}
-	var payload struct {
-		TopSellers struct {
-			Items []struct {
-				ID    int    `json:"id"`
-				Type  int    `json:"type"`
-				Name  string `json:"name"`
-				Image string `json:"header_image"`
-			} `json:"items"`
-		} `json:"top_sellers"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("parseando populares de Steam: %w", err)
 	}
 
 	popular := make([]SteamTopSeller, 0, limit)
@@ -192,12 +222,84 @@ func (s *SteamService) GetTopSellers(ctx context.Context, limit int) ([]SteamTop
 			continue
 		}
 		seen[item.ID] = struct{}{}
-		popular = append(popular, SteamTopSeller{AppID: fmt.Sprintf("%d", item.ID), Title: item.Name, Image: item.Image, Rank: len(popular) + 1})
+		popular = append(popular, SteamTopSeller{AppID: fmt.Sprintf("%d", item.ID), Title: item.Name, Image: item.HeaderImage, Rank: len(popular) + 1})
 		if len(popular) == limit {
 			break
 		}
 	}
 	return popular, nil
+}
+
+func (s *SteamService) GetSteamFeaturedDeals(ctx context.Context, limit int) ([]models.FeaturedDeal, error) {
+	if limit < 1 {
+		limit = 24
+	}
+	payload, err := s.getFeaturedCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	deals := make([]models.FeaturedDeal, 0, limit)
+	seen := make(map[int]struct{})
+	appendDeals := func(items []steamFeaturedItem) {
+		for _, item := range items {
+			if len(deals) == limit {
+				return
+			}
+			if _, ok := seen[item.ID]; ok {
+				continue
+			}
+			deal, ok := steamFeaturedDeal(item)
+			if !ok {
+				continue
+			}
+			seen[item.ID] = struct{}{}
+			deals = append(deals, deal)
+		}
+	}
+	// Specials es la fuente que refleja "Descuentos y eventos" de Steam.
+	appendDeals(payload.Specials.Items)
+	appendDeals(payload.TopSellers.Items)
+	return deals, nil
+}
+
+func (s *SteamService) getFeaturedCategories(ctx context.Context) (steamFeaturedCategories, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://store.steampowered.com/api/featuredcategories?cc=AR&l=spanish", nil)
+	if err != nil {
+		return steamFeaturedCategories{}, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return steamFeaturedCategories{}, fmt.Errorf("consultando destacados de Steam: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return steamFeaturedCategories{}, fmt.Errorf("destacados de Steam respondió con status %d", resp.StatusCode)
+	}
+	var payload steamFeaturedCategories
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return steamFeaturedCategories{}, fmt.Errorf("parseando destacados de Steam: %w", err)
+	}
+	return payload, nil
+}
+
+func steamFeaturedDeal(item steamFeaturedItem) (models.FeaturedDeal, bool) {
+	if item.ID == 0 || item.Name == "" || item.Type != 0 || item.DiscountPercent <= 0 {
+		return models.FeaturedDeal{}, false
+	}
+	image := item.LargeCapsuleImage
+	if image == "" {
+		image = item.HeaderImage
+	}
+	deal := models.FeaturedDeal{
+		ID: "steam-featured-" + fmt.Sprintf("%d", item.ID), Title: item.Name, ImageURL: image,
+		StoreName: "Steam", Price: float64(item.FinalPrice) / 100, Regular: float64(item.OriginalPrice) / 100,
+		Currency: strings.ToUpper(item.Currency), Discount: item.DiscountPercent,
+		URL: fmt.Sprintf("https://store.steampowered.com/app/%d/", item.ID), SteamAppID: fmt.Sprintf("%d", item.ID), SteamFeatured: true,
+	}
+	if item.DiscountExpiration > 0 {
+		deal.ExpiresAt = time.Unix(item.DiscountExpiration, 0).UTC().Format(time.RFC3339)
+	}
+	return deal, true
 }
 
 func (s *SteamService) GetMostPlayed(ctx context.Context, limit int) ([]models.RankedGame, error) {

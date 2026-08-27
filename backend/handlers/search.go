@@ -175,8 +175,18 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		games []services.SteamTopSeller
 		err   error
 	}
+	type highlightedResult struct {
+		deals []models.FeaturedDeal
+		err   error
+	}
+	type catalogPopularResult struct {
+		deals []models.FeaturedDeal
+		err   error
+	}
 	dealsChannel := make(chan dealsResult, 1)
 	popularChannel := make(chan popularResult, 1)
+	highlightedChannel := make(chan highlightedResult, 1)
+	catalogPopularChannel := make(chan catalogPopularResult, 1)
 	go func() {
 		deals, err := h.itad.GetDeals(r.Context(), 80)
 		dealsChannel <- dealsResult{deals: deals, err: err}
@@ -185,14 +195,30 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		games, err := h.steam.GetTopSellers(r.Context(), 30)
 		popularChannel <- popularResult{games: games, err: err}
 	}()
+	go func() {
+		deals, err := h.steam.GetSteamFeaturedDeals(r.Context(), 24)
+		highlightedChannel <- highlightedResult{deals: deals, err: err}
+	}()
+	go func() {
+		deals, err := h.itad.GetPopularDeals(r.Context(), 50)
+		catalogPopularChannel <- catalogPopularResult{deals: deals, err: err}
+	}()
 	loadedDeals := <-dealsChannel
 	loadedPopular := <-popularChannel
+	loadedHighlighted := <-highlightedChannel
+	loadedCatalogPopular := <-catalogPopularChannel
 	deals, err := loadedDeals.deals, loadedDeals.err
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
 		return
 	}
 	popular, popularErr := loadedPopular.games, loadedPopular.err
+	if loadedHighlighted.err == nil {
+		deals = append(deals, loadedHighlighted.deals...)
+	}
+	if loadedCatalogPopular.err == nil {
+		deals = append(deals, loadedCatalogPopular.deals...)
+	}
 	mostPlayed := []models.RankedGame{}
 	if discover, ok := h.cachedDiscoverResponse(); ok {
 		mostPlayed = discover.MostPlayed
@@ -203,6 +229,12 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 	response := services.RankDeals(deals, signals, limit)
 	if popularErr != nil {
 		response.Warnings = append(response.Warnings, "No pudimos sumar el ranking de ventas de Steam.")
+	}
+	if loadedHighlighted.err != nil {
+		response.Warnings = append(response.Warnings, "No pudimos sumar los destacados de Steam.")
+	}
+	if loadedCatalogPopular.err != nil {
+		response.Warnings = append(response.Warnings, "No pudimos sumar el catálogo popular.")
 	}
 	h.storeDeals(limit, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")

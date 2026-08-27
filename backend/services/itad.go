@@ -63,6 +63,12 @@ type itadDealsResponse struct {
 		Deal   itadDeal   `json:"deal"`
 	} `json:"list"`
 }
+type itadPopularGame struct {
+	Position int    `json:"position"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Type     string `json:"type"`
+}
 
 func NewITADService(apiKey string) *ITADService {
 	return &ITADService{apiKey: apiKey, client: &http.Client{Timeout: 12 * time.Second}}
@@ -145,6 +151,60 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 	return candidates, nil
 }
 
+func (s *ITADService) GetPopularDeals(ctx context.Context, limit int) ([]models.FeaturedDeal, error) {
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/stats/most-popular/v1?limit=%d", itadBaseURL, limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	var games []itadPopularGame
+	if err := s.doJSON(req, &games); err != nil {
+		return nil, fmt.Errorf("populares ITAD: %w", err)
+	}
+	ids := make([]string, 0, len(games))
+	byID := make(map[string]itadPopularGame, len(games))
+	for _, game := range games {
+		if game.ID == "" || !strings.EqualFold(game.Type, "game") {
+			continue
+		}
+		ids = append(ids, game.ID)
+		byID[game.ID] = game
+	}
+	if len(ids) == 0 {
+		return []models.FeaturedDeal{}, nil
+	}
+	prices, err := s.getPrices(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return popularDealsFromPrices(prices, byID), nil
+}
+
+func popularDealsFromPrices(prices []itadPriceResult, games map[string]itadPopularGame) []models.FeaturedDeal {
+	deals := make([]models.FeaturedDeal, 0)
+	for _, result := range prices {
+		game, ok := games[result.ID]
+		if !ok {
+			continue
+		}
+		for _, source := range result.Deals {
+			if !isEligibleFeaturedDeal(source) {
+				continue
+			}
+			deal := featuredDealFromITAD(result.ID, game.Title, itadAssets{}, source)
+			deal.ID = fmt.Sprintf("popular-%s-%s", result.ID, strings.ToLower(strings.ReplaceAll(source.Shop.Name, " ", "-")))
+			deal.ITADPopularRank = game.Position
+			deals = append(deals, deal)
+		}
+	}
+	return deals
+}
+
 func (s *ITADService) searchGames(ctx context.Context, query string) ([]itadSearchResult, error) {
 	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/games/search/v1?title=%s&results=5", itadBaseURL, url.QueryEscape(query)), nil)
 	if err != nil {
@@ -195,6 +255,22 @@ func (s *ITADService) doJSON(req *http.Request, target any) error {
 func storePriceFromDeal(deal itadDeal) models.StorePrice {
 	currency := strings.ToUpper(deal.Price.Currency)
 	return models.StorePrice{StoreName: deal.Shop.Name, Price: deal.Price.Amount, Regular: deal.Regular.Amount, Currency: currency, Discount: deal.Cut, URL: deal.URL, OnSale: deal.Cut > 0, IsRegional: strings.EqualFold(deal.Shop.Name, "Steam") && currency == "ARS"}
+}
+
+func featuredDealFromITAD(id, title string, assets itadAssets, source itadDeal) models.FeaturedDeal {
+	image := assets.Banner300
+	if image == "" {
+		image = assets.BoxArt
+	}
+	deal := models.FeaturedDeal{ID: id, Title: title, ImageURL: image, StoreName: source.Shop.Name, Price: source.Price.Amount, Regular: source.Regular.Amount, Currency: strings.ToUpper(source.Price.Currency), Discount: source.Cut, URL: source.URL}
+	if source.Expiry != nil {
+		deal.ExpiresAt = *source.Expiry
+	}
+	if source.HistoryLow != nil && strings.EqualFold(source.HistoryLow.Currency, source.Price.Currency) {
+		deal.HistoryLow = source.HistoryLow.Amount
+		deal.IsNearLow = source.Price.Amount <= source.HistoryLow.Amount*1.03
+	}
+	return deal
 }
 
 func isFeaturedStore(storeName string) bool {

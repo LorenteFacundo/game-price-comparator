@@ -13,6 +13,7 @@ import (
 
 type SteamDealSignal struct {
 	AppID       string
+	ImageURL    string
 	ReviewPct   int
 	ReviewCount int
 	PopularRank int
@@ -42,7 +43,7 @@ func RankDeals(candidates []models.FeaturedDeal, signals map[string]SteamDealSig
 			paid = append(paid, deal)
 		}
 	}
-	featured := diversifyDeals(paid, limit)
+	featured := diversifyDeals(topTierDeals(paid), limit)
 	free = diversifyDeals(free, min(limit, 8))
 
 	discounts := append([]models.FeaturedDeal(nil), paid...)
@@ -56,18 +57,37 @@ func RankDeals(candidates []models.FeaturedDeal, signals map[string]SteamDealSig
 	return models.DealsResponse{Featured: featured, Free: free, Discounts: discounts}
 }
 
+func topTierDeals(deals []models.FeaturedDeal) []models.FeaturedDeal {
+	topTier := make([]models.FeaturedDeal, 0, len(deals))
+	for _, deal := range deals {
+		// Destacadas no debe ser un relleno de descuentos enormes: necesita una
+		// señal fuerte de interés real. Estar en una campaña de Steam suma, pero
+		// no alcanza sin recepción suficiente.
+		if isSecondaryContent(deal.Title) {
+			continue
+		}
+		if deal.PopularRank > 0 || deal.ITADPopularRank > 0 || deal.Players >= 5_000 || (deal.ReviewCount >= 5_000 && deal.ReviewPct >= 75) || (deal.SteamFeatured && deal.ReviewCount >= 1_000 && deal.ReviewPct >= 80) {
+			topTier = append(topTier, deal)
+		}
+	}
+	return topTier
+}
+
 func applyDealScore(deal *models.FeaturedDeal, signal SteamDealSignal) {
 	deal.SteamAppID = signal.AppID
 	deal.ReviewPct = signal.ReviewPct
 	deal.ReviewCount = signal.ReviewCount
 	deal.PopularRank = signal.PopularRank
 	deal.Players = signal.Players
+	if deal.ImageURL == "" && signal.ImageURL != "" {
+		deal.ImageURL = signal.ImageURL
+	}
 
 	// Ya todas las candidatas están en oferta. El porcentaje exacto no define
 	// si vale la pena mirarla: sólo aporta un bonus pequeño por estar rebajada.
 	discount := 0.0
 	if deal.Discount > 0 {
-		discount = 5
+		discount = 3
 	}
 	history := 0.0
 	if deal.IsNearLow {
@@ -77,8 +97,11 @@ func applyDealScore(deal *models.FeaturedDeal, signal SteamDealSignal) {
 	}
 	popularity := 0.0
 	if signal.PopularRank > 0 {
-		// Ventas recientes: 25% más peso que el modelo anterior (25 → 31,25).
-		popularity = 31.25 * math.Max(0, 1-float64(signal.PopularRank-1)/30)
+		popularity = 42 * math.Max(0, 1-float64(signal.PopularRank-1)/30)
+	}
+	if deal.ITADPopularRank > 0 {
+		catalogPopularity := 35 * math.Max(0, 1-float64(deal.ITADPopularRank-1)/50)
+		popularity = math.Max(popularity, catalogPopularity)
 	}
 	players := 0.0
 	if signal.Players > 0 {
@@ -89,6 +112,10 @@ func applyDealScore(deal *models.FeaturedDeal, signal SteamDealSignal) {
 		adjusted := (float64(signal.ReviewPct)*float64(signal.ReviewCount) + 75*100) / float64(signal.ReviewCount+100)
 		volume := math.Min(1, math.Log10(float64(signal.ReviewCount)+1)/5)
 		reviews = 25 * (.75*adjusted/100 + .25*volume)
+	}
+	steamFeatured := 0.0
+	if deal.SteamFeatured {
+		steamFeatured = 18
 	}
 	freshness := 0.5
 	if deal.ExpiresAt != "" {
@@ -105,11 +132,17 @@ func applyDealScore(deal *models.FeaturedDeal, signal SteamDealSignal) {
 	if isSecondaryContent(deal.Title) {
 		penalty = 32
 	}
-	deal.Score = math.Round(math.Max(0, math.Min(100, discount+history+popularity+players+reviews+freshness-penalty))*10) / 10
+	deal.Score = math.Round(math.Max(0, math.Min(100, discount+history+popularity+players+reviews+steamFeatured+freshness-penalty))*10) / 10
 
 	reasons := make([]string, 0, 2)
 	if signal.PopularRank > 0 {
 		reasons = append(reasons, fmt.Sprintf("#%d en ventas", signal.PopularRank))
+	}
+	if deal.ITADPopularRank > 0 && len(reasons) < 2 {
+		reasons = append(reasons, fmt.Sprintf("#%d popular", deal.ITADPopularRank))
+	}
+	if deal.SteamFeatured && len(reasons) < 2 {
+		reasons = append(reasons, "Destacado en Steam")
 	}
 	if signal.Players > 0 && len(reasons) < 2 {
 		reasons = append(reasons, compactPlayers(signal.Players)+" jugando")
