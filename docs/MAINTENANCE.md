@@ -51,3 +51,11 @@ Las tarjetas de precio adjuntan automáticamente juego, tienda, precio mostrado,
 4. Confirmar el despliegue del frontend y backend.
 5. Consultar `/api/health` y hacer una búsqueda real.
 6. Agregar el cambio visible a la lista de novedades de `SupportDialog.jsx`.
+
+El backend mantiene compatibilidad con el comando configurado actualmente en Render:
+
+```text
+go build -o server main.go
+```
+
+El CI ejecuta esa variante de forma explícita porque `go test ./...` compila todos los archivos del paquete y no detecta dependencias ausentes cuando un proveedor compila solamente `main.go`.

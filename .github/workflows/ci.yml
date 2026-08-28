@@ -20,6 +20,8 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+      # Render conserva este comando histórico y compila sólo main.go.
+      - run: go build -o "$RUNNER_TEMP/pricepulse-server" main.go
       - run: go vet ./...
       - run: go test ./...
 
