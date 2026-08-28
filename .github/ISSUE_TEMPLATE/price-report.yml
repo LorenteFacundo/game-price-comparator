@@ -1,0 +1,35 @@
+name: Precio incorrecto
+description: Informá una diferencia entre PricePulse y la tienda.
+title: "[precio incorrecto] "
+labels: ["precio incorrecto"]
+body:
+  - type: input
+    id: game
+    attributes:
+      label: Juego
+    validations:
+      required: true
+  - type: input
+    id: store
+    attributes:
+      label: Tienda
+    validations:
+      required: true
+  - type: textarea
+    id: difference
+    attributes:
+      label: ¿Qué diferencia encontraste?
+      description: Indicá el precio mostrado por PricePulse y el que viste en la tienda.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Enlace de la tienda
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacidad
+      options:
+        - label: Confirmo que el reporte no contiene datos personales.
+          required: true

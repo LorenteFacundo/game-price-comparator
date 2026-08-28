@@ -1,7 +1,9 @@
 import axios from 'axios'
 
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
+  baseURL: API_BASE_URL,
   timeout: 15000,
 })
 
@@ -19,6 +21,16 @@ export async function searchGames(query, signal) {
   }
 }
 
+export async function getHealth(signal) {
+  try {
+    const { data } = await api.get('/api/health', { signal, timeout: 10000 })
+    return data
+  } catch (error) {
+    if (axios.isCancel(error)) throw error
+    throw new Error(messageFrom(error, 'La API no está respondiendo.'), { cause: error })
+  }
+}
+
 export async function getDeals(signal) {
   try {
     const { data } = await api.get('/api/deals', { params: { limit: 12 }, signal, timeout: 19500 })
@@ -26,6 +38,7 @@ export async function getDeals(signal) {
       featured: data.featured || [],
       free: data.free || [],
       discounts: data.discounts || [],
+      updatedAt: data.updated_at || '',
       warnings: data.warnings || [],
     }
   } catch (error) {
@@ -37,7 +50,7 @@ export async function getDeals(signal) {
 export async function getDiscover(signal) {
   try {
     const { data } = await api.get('/api/discover', { signal })
-    return { popular: data.popular || [], mostPlayed: data.most_played || [] }
+    return { popular: data.popular || [], mostPlayed: data.most_played || [], updatedAt: data.updated_at || '', warnings: data.warnings || [] }
   } catch (error) {
     if (axios.isCancel(error)) throw error
     throw new Error(messageFrom(error, 'No pudimos cargar los rankings de Steam.'), { cause: error })

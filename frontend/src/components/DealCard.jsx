@@ -1,6 +1,6 @@
 import { formatMoney } from '../api/client'
 
-export default function DealCard({ deal, onSearch, lead = false }) {
+export default function DealCard({ deal, onSearch, onReport, lead = false }) {
   const priceLabel = deal.price === 0 ? 'Gratis' : formatMoney(deal.price, deal.currency)
   return (
     <article className={`deal-card${lead ? ' deal-card-lead' : ''}`}>
@@ -18,6 +18,7 @@ export default function DealCard({ deal, onSearch, lead = false }) {
           <span className="discount">−{deal.discount_percent}%</span>
         </div>
         {deal.reasons?.length > 0 && <div className="deal-signals" aria-label="Por qué se destaca">{deal.reasons.slice(0, 2).map((reason) => <span key={reason}>{reason}</span>)}</div>}
+        <button className="report-link" type="button" onClick={() => onReport({ gameTitle: deal.title, store: deal.store_name, displayedPrice: priceLabel, sourceURL: deal.url })}>¿Precio incorrecto?</button>
       </div>
     </article>
   )

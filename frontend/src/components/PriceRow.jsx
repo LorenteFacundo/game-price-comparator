@@ -1,6 +1,6 @@
 import { displayFinalMoney } from '../api/client'
 
-export default function PriceRow({ price, preferredCurrency, officialRate, cardRate, taxRate, isBest }) {
+export default function PriceRow({ gameTitle, price, preferredCurrency, officialRate, cardRate, taxRate, isBest, onReport }) {
   const shown = displayFinalMoney(price, preferredCurrency, officialRate, cardRate, taxRate)
   const regular = price.regular > price.price ? displayFinalMoney({ ...price, price: price.regular }, preferredCurrency, officialRate, cardRate, taxRate) : null
   return (
@@ -18,7 +18,7 @@ export default function PriceRow({ price, preferredCurrency, officialRate, cardR
         {regular && <del>{regular.label}</del>}
         <small>{shown.note}</small>
       </div>
-      <a className="store-link" href={price.url} target="_blank" rel="noopener noreferrer">Ir a tienda <span aria-hidden="true">↗</span></a>
+      <div className="price-actions"><a className="store-link" href={price.url} target="_blank" rel="noopener noreferrer">Ir a tienda <span aria-hidden="true">↗</span></a><button className="report-link" type="button" onClick={() => onReport({ gameTitle, store: price.store_name, displayedPrice: shown.label, sourceURL: price.url })}>Reportar precio</button></div>
     </li>
   )
 }

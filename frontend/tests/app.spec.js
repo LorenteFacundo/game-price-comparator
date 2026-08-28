@@ -18,20 +18,50 @@ const results = {
 }
 
 const deals = {
+  updated_at: '2026-08-28T18:30:00Z',
   featured: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', score: 84, reasons: ['96% positivas', 'Mínimo histórico'] }],
   free: [{ id: 'deal-2', title: 'Free Favorite', image_url: '', store_name: 'Steam', price: 0, regular: 20, currency: 'USD', discount_percent: 100, url: 'https://store.steampowered.com/', score: 72, reasons: ['Gratis ahora'] }],
   discounts: [{ id: 'deal-3', title: 'Deep Discount', image_url: '', store_name: 'Microsoft Store', price: 2, regular: 20, currency: 'USD', discount_percent: 90, url: 'https://www.microsoft.com/', score: 50, reasons: [] }],
 }
 const discover = {
+  updated_at: '2026-08-28T18:31:00Z',
   popular: [{ id: '730', title: 'Counter-Strike 2', image_url: '', steam_url: 'https://store.steampowered.com/app/730/', rank: 1 }],
   most_played: [{ id: '570', title: 'Dota 2', image_url: '', steam_url: 'https://store.steampowered.com/app/570/', rank: 2, players: 800000 }],
 }
 
 async function mockAPI(page) {
+  await page.route('**/api/health**', (route) => route.fulfill({ json: { status: 'ok', service: 'pricepulse-api', version: 'test123', checked_at: '2026-08-28T18:32:00Z', providers: ['Steam', 'IsThereAnyDeal', 'Bluelytics'] } }))
   await page.route('**/api/deals**', (route) => route.fulfill({ json: deals }))
   await page.route('**/api/discover**', (route) => route.fulfill({ json: discover }))
   await page.route('**/api/search**', (route) => route.fulfill({ json: results }))
 }
+
+test('price reports include the selected game and store', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: '¿Precio incorrecto?' }).first().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText('Balatro', { exact: true })).toBeVisible()
+  await expect(dialog.getByText(/Epic Games Store/)).toBeVisible()
+  await expect(dialog.getByText(/reporte público en GitHub/i)).toBeVisible()
+  await dialog.getByLabel('Mensaje').fill('En la tienda figura otro precio.')
+  await page.evaluate(() => { window.open = (url) => { window.__pricePulseReport = url } })
+  await dialog.getByRole('button', { name: /preparar reporte/i }).click()
+  const reportURL = await page.evaluate(() => window.__pricePulseReport)
+  const reportBody = new URL(reportURL).searchParams.get('body')
+  expect(reportBody).toContain('Balatro')
+  expect(reportBody).toContain('Epic Games Store')
+})
+
+test('footer exposes service status and changelog', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/')
+  await expect(page.getByText('API online')).toBeVisible()
+  await page.getByRole('button', { name: 'Novedades' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByText('Ofertas top tier')).toBeVisible()
+})
 
 test('search is shareable and shows only the real regional Steam price', async ({ page }) => {
   await mockAPI(page)

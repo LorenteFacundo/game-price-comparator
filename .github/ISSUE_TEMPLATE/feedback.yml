@@ -1,0 +1,22 @@
+name: Idea, mejora o error
+description: Ayudanos a decidir qué mejorar después.
+title: "[feedback] "
+labels: ["mejora"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Tipo
+      options:
+        - Algo no funciona
+        - Una mejora
+        - Una función nueva
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: Contanos más
+      description: Qué estabas intentando hacer y qué esperabas que pasara.
+    validations:
+      required: true

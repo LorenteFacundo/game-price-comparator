@@ -79,7 +79,7 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, models.SearchResponse{Error: "No pudimos consultar las tiendas ahora. Probá de nuevo en unos segundos."})
 		return
 	}
-	response := models.SearchResponse{Query: query, Results: results}
+	response := models.SearchResponse{Query: query, Results: results, UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
 	comparisonRate := 0.0
 	if rates, err := h.currency.GetRates(r.Context()); err == nil {
 		response.USDRate = rates.Blue
@@ -227,6 +227,7 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 	signals := h.steam.GetDealSignals(signalContext, deals, popular, mostPlayed)
 	cancel()
 	response := services.RankDeals(deals, signals, limit)
+	response.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if popularErr != nil {
 		response.Warnings = append(response.Warnings, "No pudimos sumar el ranking de ventas de Steam.")
 	}
@@ -270,7 +271,7 @@ func (h *SearchHandler) HandleDiscover(w http.ResponseWriter, r *http.Request) {
 
 	popular := <-popularResult
 	mostPlayed := <-mostPlayedResult
-	response := models.DiscoverResponse{Popular: rankedTopSellers(popular.popular), MostPlayed: mostPlayed.mostPlayed}
+	response := models.DiscoverResponse{Popular: rankedTopSellers(popular.popular), MostPlayed: mostPlayed.mostPlayed, UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
 	if popular.err != nil {
 		response.Warnings = append(response.Warnings, "No pudimos actualizar los populares de Steam.")
 	}

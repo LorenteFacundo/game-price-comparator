@@ -63,6 +63,7 @@ type SearchResponse struct {
 	OfficialRate float64      `json:"official_rate"`
 	CardRate     float64      `json:"card_rate"`
 	TaxRate      float64      `json:"tax_rate"`
+	UpdatedAt    string       `json:"updated_at"`
 	Warnings     []string     `json:"warnings,omitempty"`
 	Error        string       `json:"error,omitempty"`
 }
@@ -71,6 +72,7 @@ type DealsResponse struct {
 	Featured  []FeaturedDeal `json:"featured"`
 	Free      []FeaturedDeal `json:"free"`
 	Discounts []FeaturedDeal `json:"discounts"`
+	UpdatedAt string         `json:"updated_at"`
 	Warnings  []string       `json:"warnings,omitempty"`
 	Error     string         `json:"error,omitempty"`
 }
@@ -78,6 +80,7 @@ type DealsResponse struct {
 type DiscoverResponse struct {
 	Popular    []RankedGame `json:"popular"`
 	MostPlayed []RankedGame `json:"most_played"`
+	UpdatedAt  string       `json:"updated_at"`
 	Warnings   []string     `json:"warnings,omitempty"`
 	Error      string       `json:"error,omitempty"`
 }
