@@ -1,0 +1,19 @@
+{
+  "name": "pricepulse-discord-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check src/index.js && node --check src/pricepulse.js && node --check scripts/register-command.js",
+    "register-command": "node scripts/register-command.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.3"
+  }
+}

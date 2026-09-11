@@ -3,6 +3,7 @@
 !.env.example
 *.exe
 node_modules/
+discord-worker/.wrangler/
 frontend/dist/
 coverage/
 frontend/playwright-report/

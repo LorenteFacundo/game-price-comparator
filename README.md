@@ -30,9 +30,11 @@ Para usar un backend remoto en el frontend, copiá `frontend/.env.example` a `fr
 - Cada request del backend registra ruta, estado, duración e ID de seguimiento sin guardar los términos buscados.
 - Los usuarios pueden reportar un precio desde su tarjeta; el contexto se completa automáticamente en GitHub.
 - CI valida backend, frontend y experiencia Playwright antes de integrar cambios.
+- El bot público de Discord permite usar `/precio juego:Hades` en cualquier servidor y reutiliza la misma comparación ARS + IVA de la web.
 - Dependabot propone actualizaciones mensuales de Go, npm y GitHub Actions.
 
 La rutina recomendada y el procedimiento ante incidentes están en [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
+La configuración única del bot está en [discord-worker/README.md](discord-worker/README.md).
 
 ## Verificación
 
@@ -45,6 +47,11 @@ cd ../frontend
 npm run lint
 npm run build
 npm run test:ui
+
+cd ../discord-worker
+npm ci
+npm run lint
+npm test
 ```
 
 ## Arquitectura actual

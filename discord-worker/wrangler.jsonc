@@ -1,0 +1,23 @@
+{
+  "name": "pricepulse-discord",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-11",
+  "observability": {
+    "enabled": true
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "DISCORD_JOBS",
+        "queue": "pricepulse-discord-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "pricepulse-discord-jobs",
+        "max_batch_size": 1,
+        "max_retries": 2
+      }
+    ]
+  }
+}

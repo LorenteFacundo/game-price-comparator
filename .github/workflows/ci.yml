@@ -42,3 +42,54 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
+
+  discord-worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discord-worker
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: discord-worker/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  deploy-discord-worker:
+    needs: [backend, frontend, discord-worker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discord-worker
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+      DISCORD_APPLICATION_ID: ${{ vars.DISCORD_APPLICATION_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: preflight
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Discord Worker no se desplegó: faltan secretos de Cloudflare."
+          fi
+      - uses: actions/setup-node@v5
+        if: steps.preflight.outputs.configured == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: discord-worker/package-lock.json
+      - if: steps.preflight.outputs.configured == 'true'
+        run: npm ci
+      - if: steps.preflight.outputs.configured == 'true'
+        run: npx wrangler deploy
+      - if: steps.preflight.outputs.configured == 'true' && env.DISCORD_TOKEN != '' && env.DISCORD_APPLICATION_ID != ''
+        run: npm run register-command
