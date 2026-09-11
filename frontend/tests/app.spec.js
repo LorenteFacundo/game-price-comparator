@@ -71,6 +71,16 @@ test('footer exposes service status and changelog', async ({ page }) => {
   await expect(page.getByText('Ofertas top tier')).toBeVisible()
 })
 
+test('landing explains the comparison purpose at a glance', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: '¿Dónde está más barato?' })).toBeVisible()
+  await expect(page.getByText('Steam', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Epic', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Microsoft', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Comparar precios', exact: true })).toBeVisible()
+})
+
 test('search is shareable and shows only the real regional Steam price', async ({ page }) => {
   await mockAPI(page)
   await page.goto('/?q=Hades&steam=regional')
@@ -89,7 +99,7 @@ test('currency controls keep USD prices in dollars and ARS prices with taxes', a
   await page.getByRole('button', { name: 'USD', exact: true }).click()
   await expect(page.getByText('$9.99').first()).toBeVisible()
   await expect(page.getByText('USD · Sólo precios publicados en USD para Argentina. No se convierte ningún precio.')).toBeVisible()
-  await expect(page.getByText('Steam', { exact: true })).not.toBeVisible()
+  await expect(page.locator('.game-card').getByText('Steam', { exact: true })).not.toBeVisible()
 })
 
 test('Steam rankings open a price comparison', async ({ page }) => {

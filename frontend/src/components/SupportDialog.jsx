@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 const repositoryURL = (import.meta.env.VITE_FEEDBACK_REPO_URL || 'https://github.com/LorenteFacundo/game-price-comparator').replace(/\/$/, '')
 
 const changes = [
+	{ date: '11 SEP 2026', title: 'Comparación más clara', detail: 'La portada muestra de un vistazo que buscamos el menor precio del mismo juego entre varias tiendas.' },
 	{ date: '11 SEP 2026', title: 'Precios y ofertas estables', detail: 'Moneda e impuestos consistentes, juegos gratis visibles y mejor tolerancia a fallos de proveedores.' },
   { date: '28 AGO 2026', title: 'Centro de soporte', detail: 'Reportes de precios, estado del servicio y canal de mejoras desde la app.' },
   { date: '26 AGO 2026', title: 'Ofertas top tier', detail: 'Más peso para popularidad, jugadores y recepción; los descuentos chicos siguen separados.' },

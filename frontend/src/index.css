@@ -23,6 +23,14 @@ main { padding-top: clamp(3.5rem, 9vw, 8rem); }
 .search-panel { position: relative; padding: clamp(2rem, 5vw, 5rem); overflow: hidden; border: 1px solid rgba(247, 244, 234, .18); border-radius: 1.5rem; background: linear-gradient(130deg, rgba(41, 44, 35, .92), rgba(22, 24, 19, .97)); box-shadow: 0 2rem 6rem rgba(0, 0, 0, .18); }
 .search-panel::after { content: 'PP'; position: absolute; right: -1.5rem; top: -4rem; color: rgba(205, 252, 83, .09); font: italic 17rem/1 'Instrument Serif', serif; pointer-events: none; }
 .search-copy { position: relative; z-index: 1; max-width: 46rem; }
+.search-intro { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem; align-items: end; }
+.comparison-proof { display: grid; grid-template-columns: auto auto; overflow: hidden; border: 1px solid rgba(247, 244, 234, .18); border-radius: .75rem; background: rgba(10, 11, 9, .52); box-shadow: inset 0 1px rgba(255, 255, 255, .03); }
+.comparison-stores { display: grid; }
+.comparison-stores span { min-width: 7rem; border-bottom: 1px solid rgba(247, 244, 234, .1); padding: .48rem .7rem; color: #b7b9b0; font: 500 .58rem/1 'DM Mono', monospace; text-transform: uppercase; }
+.comparison-stores span:last-child { border-bottom: 0; }
+.comparison-result { display: grid; place-items: center; align-content: center; gap: .35rem; border-left: 1px solid rgba(205, 252, 83, .28); padding: .7rem 1rem; color: #11120f; background: #cdfc53; text-align: center; }
+.comparison-result span { font: 500 1.35rem/1 'DM Mono', monospace; }
+.comparison-result strong { max-width: 5rem; font: 800 .66rem/1.15 'Manrope', sans-serif; text-transform: uppercase; }
 .eyebrow { display: block; margin-bottom: .8rem; color: #cdfc53; font: 500 .7rem/1 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
 h1, h2, h3, p { margin: 0; }
 h1 { max-width: 43rem; overflow-wrap: anywhere; font-size: clamp(3rem, 7.5vw, 6.7rem); font-weight: 700; letter-spacing: -.09em; line-height: .88; }
@@ -100,6 +108,7 @@ main { padding-top: clamp(1.5rem, 4vw, 3rem); }
 .search-panel { padding: clamp(1.25rem, 3vw, 2rem); border-radius: 1rem; box-shadow: none; }
 .search-panel::after { display: none; }
 .search-copy h1 { max-width: none; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1; }
+.search-copy h1 em { color: #cdfc53; font-family: 'Instrument Serif', serif; font-size: 1.08em; font-weight: 400; }
 .search-controls { margin-top: 1.25rem; }
 .search-options { margin-top: .9rem; }
 .deals-section, .rank-section, .results-section, .favorites-section { margin-top: clamp(2.25rem, 5vw, 4rem); }
@@ -118,6 +127,13 @@ main { padding-top: clamp(1.5rem, 4vw, 3rem); }
   main { padding-top: 1.25rem; }
   .search-panel { padding: 1rem; }
   .search-copy h1 { font-size: 2rem; }
+  .search-intro { grid-template-columns: 1fr; gap: 1rem; }
+  .comparison-proof { width: 100%; grid-template-columns: minmax(0, 1fr) auto; }
+  .comparison-stores { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .comparison-stores span { min-width: 0; border-right: 1px solid rgba(247, 244, 234, .1); border-bottom: 0; padding: .55rem .35rem; text-align: center; }
+  .comparison-stores span:last-child { border-right: 0; }
+  .comparison-result { padding-inline: .65rem; }
+  .comparison-result span { display: none; }
   .search-controls { margin-top: 1rem; }
   .search-options { gap: .65rem 1rem; }
   .section-heading h2 { font-size: 1.5rem; }

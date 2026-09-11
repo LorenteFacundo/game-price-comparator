@@ -6,11 +6,24 @@ export default function SearchPanel({ query, onQueryChange, onSearch, loading, c
 
   return (
     <form className="search-panel" onSubmit={submit}>
-      <div className="search-copy"><h1>Buscá un juego</h1></div>
+      <div className="search-intro">
+        <div className="search-copy">
+          <span className="eyebrow">Comparador de precios</span>
+          <h1>¿Dónde está <em>más barato?</em></h1>
+        </div>
+        <div className="comparison-proof" aria-label="Comparamos el mismo juego en Steam, Epic y Microsoft para encontrar el menor precio">
+          <div className="comparison-stores" aria-hidden="true">
+            <span>Steam</span>
+            <span>Epic</span>
+            <span>Microsoft</span>
+          </div>
+          <div className="comparison-result"><span aria-hidden="true">↓</span><strong>Menor precio</strong></div>
+        </div>
+      </div>
 
       <div className="search-controls">
         <label className="search-field" htmlFor="game-search">
-          <span>Juego</span>
+          <span>Nombre del juego</span>
           <input
             id="game-search"
             name="game"
@@ -24,7 +37,7 @@ export default function SearchPanel({ query, onQueryChange, onSearch, loading, c
           />
         </label>
         <button className="search-button" type="submit" disabled={loading || !query.trim()}>
-          <span>{loading ? 'Buscando…' : 'Buscar'}</span>
+          <span>{loading ? 'Comparando…' : 'Comparar precios'}</span>
           <span aria-hidden="true">↗</span>
         </button>
       </div>

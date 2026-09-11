@@ -130,7 +130,7 @@ export default function App() {
       <a className="skip-link" href="#content">Saltar al contenido</a>
       <header className="topbar">
         <a className="brand" href="/" aria-label="PricePulse, inicio"><span aria-hidden="true">◐</span> PricePulse</a>
-        <div className="topbar-meta">Steam · Epic · Microsoft</div>
+        <div className="topbar-meta">Un juego · varias tiendas · el menor precio</div>
       </header>
 
       <main id="content">
