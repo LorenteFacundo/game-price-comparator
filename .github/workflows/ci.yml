@@ -33,7 +33,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -51,7 +51,7 @@ jobs:
         working-directory: discord-worker
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -85,7 +85,7 @@ jobs:
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Discord Worker no se desplegó: faltan secretos o variables de configuración."
           fi
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         if: steps.preflight.outputs.configured == 'true'
         with:
           node-version: 22
