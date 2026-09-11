@@ -6,6 +6,7 @@ const results = {
   official_rate: 1200,
   card_rate: 1452,
   tax_rate: 0.21,
+	rates_updated_at: '2026-08-28T18:29:00Z',
   warnings: [],
   results: [{
     id: 'hades', title: 'Hades', image_url: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1145360/header.jpg',
@@ -19,7 +20,14 @@ const results = {
 
 const deals = {
   updated_at: '2026-08-28T18:30:00Z',
-  featured: [{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', score: 84, reasons: ['96% positivas', 'Mínimo histórico'] }],
+  official_rate: 1200,
+  card_rate: 1452,
+  tax_rate: 0.21,
+  rates_updated_at: '2026-08-28T18:29:00Z',
+  featured: [
+	{ id: 'deal-1', title: 'Balatro', image_url: '', store_name: 'Epic Games Store', price: 6.49, regular: 14.99, currency: 'USD', discount_percent: 57, url: 'https://store.epicgames.com/', score: 84, reasons: ['96% positivas', 'Mínimo histórico'] },
+	{ id: 'deal-1-steam', title: 'Balatro', image_url: '', store_name: 'Steam', price: 7500, regular: 15000, currency: 'ARS', discount_percent: 50, url: 'https://store.steampowered.com/', score: 80, reasons: ['Popular'] },
+  ],
   free: [{ id: 'deal-2', title: 'Free Favorite', image_url: '', store_name: 'Steam', price: 0, regular: 20, currency: 'USD', discount_percent: 100, url: 'https://store.steampowered.com/', score: 72, reasons: ['Gratis ahora'] }],
   discounts: [{ id: 'deal-3', title: 'Deep Discount', image_url: '', store_name: 'Microsoft Store', price: 2, regular: 20, currency: 'USD', discount_percent: 90, url: 'https://www.microsoft.com/', score: 50, reasons: [] }],
 }
@@ -29,11 +37,11 @@ const discover = {
   most_played: [{ id: '570', title: 'Dota 2', image_url: '', steam_url: 'https://store.steampowered.com/app/570/', rank: 2, players: 800000 }],
 }
 
-async function mockAPI(page) {
+async function mockAPI(page, overrides = {}) {
   await page.route('**/api/health**', (route) => route.fulfill({ json: { status: 'ok', service: 'pricepulse-api', version: 'test123', checked_at: '2026-08-28T18:32:00Z', providers: ['Steam', 'IsThereAnyDeal', 'Bluelytics'] } }))
-  await page.route('**/api/deals**', (route) => route.fulfill({ json: deals }))
-  await page.route('**/api/discover**', (route) => route.fulfill({ json: discover }))
-  await page.route('**/api/search**', (route) => route.fulfill({ json: results }))
+  await page.route('**/api/deals**', (route) => route.fulfill({ json: overrides.deals || deals }))
+  await page.route('**/api/discover**', (route) => route.fulfill({ json: overrides.discover || discover }))
+  await page.route('**/api/search**', (route) => route.fulfill({ json: overrides.results || results }))
 }
 
 test('price reports include the selected game and store', async ({ page }) => {
@@ -101,6 +109,52 @@ test('offers switch between curated, free and biggest discount views', async ({ 
   await expect(page.getByRole('button', { name: 'Free Favorite' })).toBeVisible()
   await page.getByRole('tab', { name: /más descuento/i }).click()
   await expect(page.getByRole('button', { name: 'Deep Discount' })).toBeVisible()
+})
+
+test('offers obey ARS plus tax and USD modes', async ({ page }) => {
+	await mockAPI(page)
+	await page.goto('/')
+	const balatro = page.locator('.deal-card').filter({ hasText: 'Balatro' }).first()
+	await expect(balatro).toContainText('9.423')
+	await expect(balatro).toContainText('total con IVA 21%')
+	await page.getByRole('button', { name: 'USD', exact: true }).click()
+	await expect(page.locator('.deal-card').filter({ hasText: 'Balatro' }).first()).toContainText('$6.49')
+})
+
+test('store filters preserve a regional variant of the same game', async ({ page }) => {
+	await mockAPI(page)
+	await page.goto('/')
+	await page.getByRole('button', { name: 'Steam', exact: true }).click()
+	const balatro = page.locator('.deal-card').filter({ hasText: 'Balatro' })
+	await expect(balatro).toHaveCount(1)
+	await expect(balatro).toContainText('7.500')
+	await expect(balatro).toContainText('precio regional publicado')
+})
+
+test('a free search price remains visible and wins over a paid store', async ({ page }) => {
+	const freeResults = { ...results, results: [{ ...results.results[0], best_deal: { store_name: 'Steam', price: 0, regular: 10, currency: 'USD', url: 'https://store.steampowered.com/' }, prices: [{ store_name: 'Steam', price: 0, regular: 10, currency: 'USD', url: 'https://store.steampowered.com/' }, { store_name: 'Epic Games Store', price: 10, regular: 20, currency: 'USD', url: 'https://store.epicgames.com/' }] }] }
+	await mockAPI(page, { results: freeResults })
+	await page.goto('/?q=Hades')
+	await expect(page.locator('.best-summary')).toContainText('Gratis')
+	await expect(page.getByText('Gratis', { exact: true }).first()).toBeVisible()
+})
+
+test('an empty successful search has an explicit result state', async ({ page }) => {
+	await mockAPI(page, { results: { ...results, results: [] } })
+	await page.goto('/?q=JuegoInexistente')
+	await expect(page.getByRole('heading', { name: 'No encontramos “JuegoInexistente”' })).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'Populares en Steam' })).not.toBeVisible()
+})
+
+test('status shows independent freshness timestamps', async ({ page }) => {
+	await mockAPI(page)
+	await page.goto('/?q=Hades')
+	await page.getByRole('button', { name: 'Estado' }).click()
+	const dialog = page.getByRole('dialog')
+	await expect(dialog.getByText('Búsqueda', { exact: true })).toBeVisible()
+	await expect(dialog.getByText('Ofertas', { exact: true })).toBeVisible()
+	await expect(dialog.getByText('Rankings', { exact: true })).toBeVisible()
+	await expect(dialog.getByText('Cotización', { exact: true })).toBeVisible()
 })
 
 test('mobile layout has no horizontal overflow', async ({ page }) => {

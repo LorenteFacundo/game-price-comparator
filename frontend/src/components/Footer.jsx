@@ -1,5 +1,6 @@
-export default function Footer({ health, lastUpdated, onOpenSupport }) {
-  const updated = lastUpdated ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(lastUpdated)) : '—'
+export default function Footer({ health, updates, onOpenSupport }) {
+	const latest = [updates.search, updates.deals, updates.discover].filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0]
+	const updated = latest ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(latest)) : '—'
   return <footer className="site-footer">
     <div className="footer-identity"><span>PRICEPULSE · ARGENTINA</span><small>Precios orientativos. El total válido es el de la tienda.</small></div>
     <div className="footer-status"><span className={`status-dot ${health.state === 'online' ? 'is-online' : ''}`} aria-hidden="true" />{health.state === 'online' ? 'API online' : health.state === 'checking' ? 'Comprobando' : 'Revisar estado'}<small>Actualizado {updated}</small></div>

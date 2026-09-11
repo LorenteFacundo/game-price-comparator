@@ -11,13 +11,17 @@ import (
 
 type CurrencyService struct {
 	client   *http.Client
+	endpoint string
+	now      func() time.Time
 	mu       sync.RWMutex
 	cached   ExchangeRates
 	cacheAge time.Time
 }
 type ExchangeRates struct {
-	Blue     float64
-	Official float64
+	Blue      float64
+	Official  float64
+	UpdatedAt time.Time
+	Stale     bool
 }
 
 type bluelyticsResponse struct {
@@ -30,7 +34,7 @@ type bluelyticsResponse struct {
 }
 
 func NewCurrencyService() *CurrencyService {
-	return &CurrencyService{client: &http.Client{Timeout: 5 * time.Second}}
+	return &CurrencyService{client: &http.Client{Timeout: 5 * time.Second}, endpoint: "https://api.bluelytics.com.ar/v2/latest", now: time.Now}
 }
 
 func (c *CurrencyService) GetBlueRate(ctx context.Context) (float64, error) {
@@ -40,39 +44,49 @@ func (c *CurrencyService) GetBlueRate(ctx context.Context) (float64, error) {
 
 func (c *CurrencyService) GetRates(ctx context.Context) (ExchangeRates, error) {
 	c.mu.RLock()
-	if c.cached.Blue > 0 && c.cached.Official > 0 && time.Since(c.cacheAge) < 10*time.Minute {
+	now := c.now()
+	if c.cached.Blue > 0 && c.cached.Official > 0 && now.Sub(c.cacheAge) < 10*time.Minute {
 		rates := c.cached
 		c.mu.RUnlock()
 		return rates, nil
 	}
 	cached := c.cached
 	c.mu.RUnlock()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bluelytics.com.ar/v2/latest", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, nil)
 	if err != nil {
 		return ExchangeRates{}, fmt.Errorf("creando consulta de tipo de cambio: %w", err)
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		if cached.Blue > 0 && cached.Official > 0 {
-			return cached, nil
-		}
-		return ExchangeRates{}, fmt.Errorf("obteniendo tipo de cambio: %w", err)
+		return c.staleOrError(cached, now, fmt.Errorf("obteniendo tipo de cambio: %w", err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ExchangeRates{}, fmt.Errorf("tipo de cambio respondió con status %d", resp.StatusCode)
+		return c.staleOrError(cached, now, fmt.Errorf("tipo de cambio respondió con status %d", resp.StatusCode))
 	}
 	var data bluelyticsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return ExchangeRates{}, fmt.Errorf("parseando tipo de cambio: %w", err)
+		return c.staleOrError(cached, now, fmt.Errorf("parseando tipo de cambio: %w", err))
 	}
 	if data.Blue.ValueSell <= 0 || data.Official.ValueSell <= 0 {
-		return ExchangeRates{}, fmt.Errorf("tipos de cambio inválidos")
+		return c.staleOrError(cached, now, fmt.Errorf("tipos de cambio inválidos"))
 	}
-	rates := ExchangeRates{Blue: data.Blue.ValueSell, Official: data.Official.ValueSell}
+	rates := ExchangeRates{Blue: data.Blue.ValueSell, Official: data.Official.ValueSell, UpdatedAt: now}
 	c.mu.Lock()
 	c.cached = rates
-	c.cacheAge = time.Now()
+	c.cacheAge = now
 	c.mu.Unlock()
 	return rates, nil
+}
+
+func (c *CurrencyService) staleOrError(cached ExchangeRates, now time.Time, cause error) (ExchangeRates, error) {
+	c.mu.RLock()
+	cacheAge := c.cacheAge
+	c.mu.RUnlock()
+	if cached.Blue > 0 && cached.Official > 0 && !cacheAge.IsZero() && now.Sub(cacheAge) <= 6*time.Hour {
+		cached.UpdatedAt = cacheAge
+		cached.Stale = true
+		return cached, nil
+	}
+	return ExchangeRates{}, cause
 }

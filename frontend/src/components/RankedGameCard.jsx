@@ -13,7 +13,7 @@ export default function RankedGameCard({ game, onSearch, showPlayers = false }) 
           <span className="rank-number">#{game.rank}</span>
         </div>
         <span className="rank-title">{game.title}</span>
-        <span className="rank-action">{showPlayers && players ? `${players} jugando` : 'Comparar precios'} <b aria-hidden="true">↗</b></span>
+		<span className="rank-action">{showPlayers && players ? `${players} pico reciente` : 'Comparar precios'} <b aria-hidden="true">↗</b></span>
       </button>
     </article>
   )

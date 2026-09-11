@@ -14,7 +14,27 @@ import (
 	"game-price-comparator/services"
 )
 
-const cacheTTL = 5 * time.Minute
+const (
+	cacheTTL              = 5 * time.Minute
+	maxSearchCacheEntries = 500
+	dealsRequestTimeout   = 15 * time.Second
+)
+
+type itadProvider interface {
+	Search(context.Context, string) ([]models.GameResult, error)
+	GetDeals(context.Context, int) ([]models.FeaturedDeal, error)
+	GetPopularDeals(context.Context, int) ([]models.FeaturedDeal, error)
+}
+type currencyProvider interface {
+	GetRates(context.Context) (services.ExchangeRates, error)
+}
+type steamProvider interface {
+	GetPriceByTitle(context.Context, string, string) (*services.SteamPrice, error)
+	GetTopSellers(context.Context, int) ([]services.SteamTopSeller, error)
+	GetSteamFeaturedDeals(context.Context, int) ([]models.FeaturedDeal, error)
+	GetDealSignals(context.Context, []models.FeaturedDeal, []services.SteamTopSeller, []models.RankedGame) map[string]services.SteamDealSignal
+	GetMostPlayed(context.Context, int) ([]models.RankedGame, error)
+}
 
 type cachedSearch struct {
 	response  models.SearchResponse
@@ -29,9 +49,9 @@ type cachedDiscover struct {
 	expiresAt time.Time
 }
 type SearchHandler struct {
-	itad          *services.ITADService
-	currency      *services.CurrencyService
-	steam         *services.SteamService
+	itad          itadProvider
+	currency      currencyProvider
+	steam         steamProvider
 	taxRate       float64
 	mu            sync.RWMutex
 	searchCache   map[string]cachedSearch
@@ -39,7 +59,7 @@ type SearchHandler struct {
 	discoverCache cachedDiscover
 }
 
-func NewSearchHandler(itad *services.ITADService, currency *services.CurrencyService, steam *services.SteamService, taxRate float64) *SearchHandler {
+func NewSearchHandler(itad itadProvider, currency currencyProvider, steam steamProvider, taxRate float64) *SearchHandler {
 	if taxRate < 0 || taxRate > 1 {
 		taxRate = 0.21
 	}
@@ -86,7 +106,14 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		response.OfficialRate = rates.Official
 		response.TaxRate = h.taxRate
 		response.CardRate = rates.Official * (1 + response.TaxRate)
+		if !rates.UpdatedAt.IsZero() {
+			response.RatesUpdatedAt = rates.UpdatedAt.UTC().Format(time.RFC3339)
+		}
+		response.RatesStale = rates.Stale
 		comparisonRate = response.CardRate
+		if rates.Stale {
+			response.Warnings = append(response.Warnings, "La cotización está temporalmente desactualizada; verificá el total antes de comprar.")
+		}
 	} else {
 		response.Warnings = append(response.Warnings, "No se pudo actualizar la cotización; mostramos el precio base.")
 	}
@@ -167,6 +194,8 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), dealsRequestTimeout)
+	defer cancel()
 	type dealsResult struct {
 		deals []models.FeaturedDeal
 		err   error
@@ -183,35 +212,38 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 		deals []models.FeaturedDeal
 		err   error
 	}
+	type ratesResult struct {
+		rates services.ExchangeRates
+		err   error
+	}
 	dealsChannel := make(chan dealsResult, 1)
 	popularChannel := make(chan popularResult, 1)
 	highlightedChannel := make(chan highlightedResult, 1)
 	catalogPopularChannel := make(chan catalogPopularResult, 1)
+	ratesChannel := make(chan ratesResult, 1)
 	go func() {
-		deals, err := h.itad.GetDeals(r.Context(), 80)
+		deals, err := h.itad.GetDeals(ctx, 80)
 		dealsChannel <- dealsResult{deals: deals, err: err}
 	}()
 	go func() {
-		games, err := h.steam.GetTopSellers(r.Context(), 30)
+		games, err := h.steam.GetTopSellers(ctx, 30)
 		popularChannel <- popularResult{games: games, err: err}
 	}()
 	go func() {
-		deals, err := h.steam.GetSteamFeaturedDeals(r.Context(), 24)
+		deals, err := h.steam.GetSteamFeaturedDeals(ctx, 24)
 		highlightedChannel <- highlightedResult{deals: deals, err: err}
 	}()
 	go func() {
-		deals, err := h.itad.GetPopularDeals(r.Context(), 50)
+		deals, err := h.itad.GetPopularDeals(ctx, 50)
 		catalogPopularChannel <- catalogPopularResult{deals: deals, err: err}
 	}()
+	go func() { rates, err := h.currency.GetRates(ctx); ratesChannel <- ratesResult{rates: rates, err: err} }()
 	loadedDeals := <-dealsChannel
 	loadedPopular := <-popularChannel
 	loadedHighlighted := <-highlightedChannel
 	loadedCatalogPopular := <-catalogPopularChannel
-	deals, err := loadedDeals.deals, loadedDeals.err
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
-		return
-	}
+	loadedRates := <-ratesChannel
+	deals := append([]models.FeaturedDeal(nil), loadedDeals.deals...)
 	popular, popularErr := loadedPopular.games, loadedPopular.err
 	if loadedHighlighted.err == nil {
 		deals = append(deals, loadedHighlighted.deals...)
@@ -223,11 +255,30 @@ func (h *SearchHandler) HandleDeals(w http.ResponseWriter, r *http.Request) {
 	if discover, ok := h.cachedDiscoverResponse(); ok {
 		mostPlayed = discover.MostPlayed
 	}
-	signalContext, cancel := context.WithTimeout(r.Context(), 6*time.Second)
-	signals := h.steam.GetDealSignals(signalContext, deals, popular, mostPlayed)
-	cancel()
-	response := services.RankDeals(deals, signals, limit)
+	if len(deals) == 0 {
+		writeJSON(w, http.StatusBadGateway, models.DealsResponse{Error: "No pudimos cargar las ofertas ahora."})
+		return
+	}
+	signals := h.steam.GetDealSignals(ctx, deals, popular, mostPlayed)
+	response := services.RankDeals(deals, signals, limit*3)
 	response.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	response.TaxRate = h.taxRate
+	if loadedRates.err == nil {
+		response.OfficialRate = loadedRates.rates.Official
+		response.CardRate = loadedRates.rates.Official * (1 + h.taxRate)
+		if !loadedRates.rates.UpdatedAt.IsZero() {
+			response.RatesUpdatedAt = loadedRates.rates.UpdatedAt.UTC().Format(time.RFC3339)
+		}
+		response.RatesStale = loadedRates.rates.Stale
+		if loadedRates.rates.Stale {
+			response.Warnings = append(response.Warnings, "La cotización está temporalmente desactualizada; verificá el total antes de comprar.")
+		}
+	} else {
+		response.Warnings = append(response.Warnings, "No pudimos actualizar la cotización; la conversión a ARS no está disponible.")
+	}
+	if loadedDeals.err != nil {
+		response.Warnings = append(response.Warnings, "No pudimos sumar las ofertas generales del catálogo.")
+	}
 	if popularErr != nil {
 		response.Warnings = append(response.Warnings, "No pudimos sumar el ranking de ventas de Steam.")
 	}
@@ -295,14 +346,34 @@ func rankedTopSellers(games []services.SteamTopSeller) []models.RankedGame {
 	return ranked
 }
 func (h *SearchHandler) cachedSearch(key string) (models.SearchResponse, bool) {
-	h.mu.RLock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	entry, ok := h.searchCache[key]
-	h.mu.RUnlock()
-	return entry.response, ok && time.Now().Before(entry.expiresAt)
+	if ok && !time.Now().Before(entry.expiresAt) {
+		delete(h.searchCache, key)
+		return models.SearchResponse{}, false
+	}
+	return entry.response, ok
 }
 func (h *SearchHandler) storeSearch(key string, response models.SearchResponse) {
 	h.mu.Lock()
-	h.searchCache[key] = cachedSearch{response: response, expiresAt: time.Now().Add(cacheTTL)}
+	now := time.Now()
+	for cacheKey, entry := range h.searchCache {
+		if !now.Before(entry.expiresAt) {
+			delete(h.searchCache, cacheKey)
+		}
+	}
+	if _, exists := h.searchCache[key]; !exists && len(h.searchCache) >= maxSearchCacheEntries {
+		var oldestKey string
+		var oldestExpiry time.Time
+		for cacheKey, entry := range h.searchCache {
+			if oldestExpiry.IsZero() || entry.expiresAt.Before(oldestExpiry) {
+				oldestKey, oldestExpiry = cacheKey, entry.expiresAt
+			}
+		}
+		delete(h.searchCache, oldestKey)
+	}
+	h.searchCache[key] = cachedSearch{response: response, expiresAt: now.Add(cacheTTL)}
 	h.mu.Unlock()
 }
 func (h *SearchHandler) cachedDeals(limit int) (models.DealsResponse, bool) {
@@ -351,8 +422,11 @@ func sortPricesAndPickBest(prices []models.StorePrice, usdRate float64) ([]model
 func normalizedARS(price models.StorePrice, usdRate float64) (float64, bool) {
 	switch strings.ToUpper(price.Currency) {
 	case "ARS":
-		return price.Price, price.Price > 0
+		return price.Price, price.Price >= 0
 	case "USD":
+		if price.Price == 0 {
+			return 0, true
+		}
 		return price.Price * usdRate, price.Price > 0 && usdRate > 0
 	default:
 		return 0, false

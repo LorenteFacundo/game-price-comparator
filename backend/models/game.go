@@ -57,24 +57,31 @@ type RankedGame struct {
 }
 
 type SearchResponse struct {
-	Query        string       `json:"query"`
-	Results      []GameResult `json:"results"`
-	USDRate      float64      `json:"usd_rate"`
-	OfficialRate float64      `json:"official_rate"`
-	CardRate     float64      `json:"card_rate"`
-	TaxRate      float64      `json:"tax_rate"`
-	UpdatedAt    string       `json:"updated_at"`
-	Warnings     []string     `json:"warnings,omitempty"`
-	Error        string       `json:"error,omitempty"`
+	Query          string       `json:"query"`
+	Results        []GameResult `json:"results"`
+	USDRate        float64      `json:"usd_rate"`
+	OfficialRate   float64      `json:"official_rate"`
+	CardRate       float64      `json:"card_rate"`
+	TaxRate        float64      `json:"tax_rate"`
+	RatesUpdatedAt string       `json:"rates_updated_at,omitempty"`
+	RatesStale     bool         `json:"rates_stale"`
+	UpdatedAt      string       `json:"updated_at"`
+	Warnings       []string     `json:"warnings,omitempty"`
+	Error          string       `json:"error,omitempty"`
 }
 
 type DealsResponse struct {
-	Featured  []FeaturedDeal `json:"featured"`
-	Free      []FeaturedDeal `json:"free"`
-	Discounts []FeaturedDeal `json:"discounts"`
-	UpdatedAt string         `json:"updated_at"`
-	Warnings  []string       `json:"warnings,omitempty"`
-	Error     string         `json:"error,omitempty"`
+	Featured       []FeaturedDeal `json:"featured"`
+	Free           []FeaturedDeal `json:"free"`
+	Discounts      []FeaturedDeal `json:"discounts"`
+	OfficialRate   float64        `json:"official_rate"`
+	CardRate       float64        `json:"card_rate"`
+	TaxRate        float64        `json:"tax_rate"`
+	RatesUpdatedAt string         `json:"rates_updated_at,omitempty"`
+	RatesStale     bool           `json:"rates_stale"`
+	UpdatedAt      string         `json:"updated_at"`
+	Warnings       []string       `json:"warnings,omitempty"`
+	Error          string         `json:"error,omitempty"`
 }
 
 type DiscoverResponse struct {

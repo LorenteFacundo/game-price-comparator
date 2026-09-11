@@ -4,12 +4,13 @@ Comparador de ofertas de videojuegos pensado para Argentina. Prioriza tiendas ve
 
 ## Qué incluye
 
-- Búsqueda de juegos en IsThereAnyDeal y precio regional/global de Steam para el resultado principal.
-- Ofertas destacadas reales de ITAD, ordenadas por descuento.
+- Búsqueda de juegos en IsThereAnyDeal con precios publicados para Argentina.
+- Ofertas de Steam, Epic y Microsoft ordenadas por popularidad, recepción y jugadores, sin perder los juegos gratis.
+- Selector USD / ARS + IMP aplicado tanto a comparaciones como a ofertas.
 - Ranking de precios que solo compara monedas convertibles conocidas; nunca interpreta USD como ARS.
 - Favoritos e historial de búsqueda guardados localmente en el navegador.
 - Interfaz responsive, accesible y sin promoción de cuentas compartidas.
-- Caché en memoria para proteger las cuotas de proveedores en despliegues gratuitos.
+- Caché en memoria limitada para proteger las cuotas de proveedores en despliegues gratuitos.
 - Reportes contextuales de precios y sugerencias mediante GitHub Issues.
 - Estado operativo, versión desplegada y fecha real de actualización de los datos.
 
@@ -25,6 +26,7 @@ Para usar un backend remoto en el frontend, copiá `frontend/.env.example` a `fr
 ## Mantenimiento en producción
 
 - `GET /api/health` informa estado, versión, uptime y proveedores configurados. Se puede conectar a cualquier monitor HTTP.
+- La API conserva resultados parciales si una fuente de ofertas falla y avisa cuando la cotización usada está desactualizada.
 - Cada request del backend registra ruta, estado, duración e ID de seguimiento sin guardar los términos buscados.
 - Los usuarios pueden reportar un precio desde su tarjeta; el contexto se completa automáticamente en GitHub.
 - CI valida backend, frontend y experiencia Playwright antes de integrar cambios.

@@ -163,7 +163,7 @@ func diversifyDeals(deals []models.FeaturedDeal, limit int) []models.FeaturedDea
 	selected := make([]models.FeaturedDeal, 0, limit)
 	seen := make(map[string]int)
 	for _, deal := range deals {
-		key := canonicalDealTitle(deal.Title)
+		key := canonicalDealTitle(deal.Title) + "|" + canonicalStoreName(deal.StoreName)
 		if seen[key] >= 1 {
 			continue
 		}
@@ -174,6 +174,20 @@ func diversifyDeals(deals []models.FeaturedDeal, limit int) []models.FeaturedDea
 		}
 	}
 	return selected
+}
+
+func canonicalStoreName(name string) string {
+	normal := strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case strings.Contains(normal, "steam"):
+		return "steam"
+	case strings.Contains(normal, "epic"):
+		return "epic"
+	case strings.Contains(normal, "microsoft"):
+		return "microsoft"
+	default:
+		return normal
+	}
 }
 
 func canonicalDealTitle(title string) string {

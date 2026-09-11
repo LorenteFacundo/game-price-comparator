@@ -1,7 +1,9 @@
-import { formatMoney } from '../api/client'
+import { displayFinalMoney } from '../api/client'
 
-export default function DealCard({ deal, onSearch, onReport, lead = false }) {
-  const priceLabel = deal.price === 0 ? 'Gratis' : formatMoney(deal.price, deal.currency)
+export default function DealCard({ deal, currency, officialRate, cardRate, taxRate, onSearch, onReport, lead = false }) {
+	const price = displayFinalMoney(deal, currency, officialRate, cardRate, taxRate)
+	const regular = displayFinalMoney({ price: deal.regular, currency: deal.currency }, currency, officialRate, cardRate, taxRate)
+	const priceLabel = price.label
   return (
     <article className={`deal-card${lead ? ' deal-card-lead' : ''}`}>
       <a href={deal.url} target="_blank" rel="noopener noreferrer" className="deal-image-link" aria-label={`Ver ${deal.title} en ${deal.store_name}`}>
@@ -14,9 +16,10 @@ export default function DealCard({ deal, onSearch, onReport, lead = false }) {
         <button className="deal-title" type="button" onClick={() => onSearch(deal.title)}>{deal.title}</button>
         <div className="deal-price-line">
           <strong>{priceLabel}</strong>
-          {deal.regular > deal.price && <del>{formatMoney(deal.regular, deal.currency)}</del>}
+		  {deal.regular > deal.price && <del>{regular.label}</del>}
           <span className="discount">−{deal.discount_percent}%</span>
-        </div>
+		</div>
+		{price.note && <small className="deal-price-note">{price.note}</small>}
         {deal.reasons?.length > 0 && <div className="deal-signals" aria-label="Por qué se destaca">{deal.reasons.slice(0, 2).map((reason) => <span key={reason}>{reason}</span>)}</div>}
         <button className="report-link" type="button" onClick={() => onReport({ gameTitle: deal.title, store: deal.store_name, displayedPrice: priceLabel, sourceURL: deal.url })}>¿Precio incorrecto?</button>
       </div>

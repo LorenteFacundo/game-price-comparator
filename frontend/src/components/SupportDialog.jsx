@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 const repositoryURL = (import.meta.env.VITE_FEEDBACK_REPO_URL || 'https://github.com/LorenteFacundo/game-price-comparator').replace(/\/$/, '')
 
 const changes = [
+	{ date: '11 SEP 2026', title: 'Precios y ofertas estables', detail: 'Moneda e impuestos consistentes, juegos gratis visibles y mejor tolerancia a fallos de proveedores.' },
   { date: '28 AGO 2026', title: 'Centro de soporte', detail: 'Reportes de precios, estado del servicio y canal de mejoras desde la app.' },
   { date: '26 AGO 2026', title: 'Ofertas top tier', detail: 'Más peso para popularidad, jugadores y recepción; los descuentos chicos siguen separados.' },
   { date: '26 AGO 2026', title: 'Precios para Argentina', detail: 'USD directo o conversión ARS + IVA, sin mezclar precios globales.' },
@@ -41,12 +42,12 @@ function buildIssueURL(kind, message, context) {
   return issueURL.toString()
 }
 
-export default function SupportDialog({ open, initialView, context, health, lastUpdated, warnings, onClose }) {
-  if (!open) return null
-  return <SupportDialogContent initialView={initialView} context={context} health={health} lastUpdated={lastUpdated} warnings={warnings} onClose={onClose} />
+export default function SupportDialog({ open, initialView, context, health, updates, warnings, onClose }) {
+	if (!open) return null
+	return <SupportDialogContent initialView={initialView} context={context} health={health} updates={updates} warnings={warnings} onClose={onClose} />
 }
 
-function SupportDialogContent({ initialView, context, health, lastUpdated, warnings, onClose }) {
+function SupportDialogContent({ initialView, context, health, updates, warnings, onClose }) {
   const dialog = useRef(null)
   const closeButton = useRef(null)
   const [view, setView] = useState(initialView || 'feedback')
@@ -116,7 +117,7 @@ function SupportDialogContent({ initialView, context, health, lastUpdated, warni
 
         {view === 'status' && <div className="status-panel">
           <div className={`system-state ${healthOnline ? 'is-online' : health.state === 'checking' ? 'is-checking' : 'is-offline'}`}><span aria-hidden="true" /><div><strong>{healthOnline ? 'API funcionando' : health.state === 'checking' ? 'Comprobando API' : 'API sin respuesta'}</strong><small>{healthOnline ? `Versión ${health.data?.version || 'actual'}` : health.message || 'Reintentaremos al recargar.'}</small></div></div>
-          <dl><div><dt>Datos actualizados</dt><dd>{formatTimestamp(lastUpdated)}</dd></div><div><dt>Fuentes</dt><dd>Steam · Epic · Microsoft · ITAD</dd></div><div><dt>Avisos activos</dt><dd>{warnings.length}</dd></div></dl>
+		  <dl><div><dt>Búsqueda</dt><dd>{formatTimestamp(updates.search)}</dd></div><div><dt>Ofertas</dt><dd>{formatTimestamp(updates.deals)}</dd></div><div><dt>Rankings</dt><dd>{formatTimestamp(updates.discover)}</dd></div><div><dt>Cotización</dt><dd>{formatTimestamp(updates.rates)}</dd></div><div><dt>Fuentes</dt><dd>Steam · Epic · Microsoft · ITAD</dd></div><div><dt>Avisos activos</dt><dd>{warnings.length}</dd></div></dl>
           {warnings.length > 0 && <ul className="status-warnings">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <p className="privacy-note">Los precios pueden cambiar antes de la próxima actualización. Confirmá siempre el total en la tienda.</p>
         </div>}

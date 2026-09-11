@@ -47,6 +47,17 @@ func TestRankDealsDeduplicatesEditions(t *testing.T) {
 	}
 }
 
+func TestRankDealsPreservesSameGameAcrossStores(t *testing.T) {
+	deals := []models.FeaturedDeal{
+		{ID: "steam", Title: "Hades", StoreName: "Steam", Price: 10, Discount: 50, ITADPopularRank: 1},
+		{ID: "epic", Title: "Hades Deluxe Edition", StoreName: "Epic Games Store", Price: 11, Discount: 45, ITADPopularRank: 1},
+	}
+	result := RankDeals(deals, nil, 12)
+	if len(result.Featured) != 2 {
+		t.Fatalf("expected one variant per store, got %+v", result.Featured)
+	}
+}
+
 func TestRankDealsUsesITADPopularityAsATopTierSignal(t *testing.T) {
 	result := RankDeals([]models.FeaturedDeal{{ID: "catalog", Title: "Top Catalog Game", Price: 20, Discount: 20, ITADPopularRank: 4}}, nil, 12)
 	if len(result.Featured) != 1 || result.Featured[0].ID != "catalog" {
