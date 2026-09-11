@@ -16,7 +16,7 @@ El Worker no usa Gateway ni base de datos. Discord recibe un acuse en menos de t
 
 ## Despliegue continuo
 
-En GitHub, cargá estos secretos: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` y `DISCORD_TOKEN`. Para que el workflow vuelva a registrar el comando en cada deploy, agregá además la variable de repositorio `DISCORD_APPLICATION_ID`. Las otras cuatro variables siguen configuradas directamente en Cloudflare, como en el paso 4.
+En GitHub, cargá estos secretos: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` y `DISCORD_TOKEN`. También cargá como variables de repositorio `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `BACKEND_URL` y `FRONTEND_URL`. El workflow las aplica en cada deploy para que una versión nueva no pierda la configuración del bot.
 
 Cuando cambie `discord-worker/` en `main`, el workflow ejecuta las pruebas, despliega el Worker y vuelve a registrar `/precio`. Si faltan los secretos, la verificación sigue corriendo y el despliegue queda omitido de forma segura.
 

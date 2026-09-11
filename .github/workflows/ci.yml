@@ -1,6 +1,7 @@
 name: Verify
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main, Actualizacion]
@@ -71,15 +72,18 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       DISCORD_APPLICATION_ID: ${{ vars.DISCORD_APPLICATION_ID }}
+      BACKEND_URL: ${{ vars.BACKEND_URL }}
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+      DISCORD_PUBLIC_KEY: ${{ vars.DISCORD_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v5
       - id: preflight
         run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] && [ -n "$DISCORD_TOKEN" ] && [ -n "$DISCORD_APPLICATION_ID" ] && [ -n "$BACKEND_URL" ] && [ -n "$FRONTEND_URL" ] && [ -n "$DISCORD_PUBLIC_KEY" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Discord Worker no se desplegó: faltan secretos de Cloudflare."
+            echo "::notice::Discord Worker no se desplegó: faltan secretos o variables de configuración."
           fi
       - uses: actions/setup-node@v5
         if: steps.preflight.outputs.configured == 'true'
@@ -90,6 +94,6 @@ jobs:
       - if: steps.preflight.outputs.configured == 'true'
         run: npm ci
       - if: steps.preflight.outputs.configured == 'true'
-        run: npx wrangler deploy
+        run: npx wrangler deploy --var "BACKEND_URL:$BACKEND_URL" --var "FRONTEND_URL:$FRONTEND_URL" --var "DISCORD_APPLICATION_ID:$DISCORD_APPLICATION_ID" --var "DISCORD_PUBLIC_KEY:$DISCORD_PUBLIC_KEY"
       - if: steps.preflight.outputs.configured == 'true' && env.DISCORD_TOKEN != '' && env.DISCORD_APPLICATION_ID != ''
         run: npm run register-command
