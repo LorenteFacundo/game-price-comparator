@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -32,7 +32,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -50,7 +50,7 @@ jobs:
       run:
         working-directory: discord-worker
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -76,7 +76,7 @@ jobs:
       FRONTEND_URL: ${{ vars.FRONTEND_URL }}
       DISCORD_PUBLIC_KEY: ${{ vars.DISCORD_PUBLIC_KEY }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: preflight
         run: |
           if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] && [ -n "$DISCORD_TOKEN" ] && [ -n "$DISCORD_APPLICATION_ID" ] && [ -n "$BACKEND_URL" ] && [ -n "$FRONTEND_URL" ] && [ -n "$DISCORD_PUBLIC_KEY" ]; then
