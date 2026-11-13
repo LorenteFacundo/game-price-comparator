@@ -174,3 +174,16 @@ test('mobile layout has no horizontal overflow', async ({ page }) => {
   await expect(page.locator('#results-title')).toHaveText('Hades')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
 })
+
+test('a slow cold start explains that the server is waking up', async ({ page }) => {
+  await mockAPI(page)
+  await page.route('**/api/deals**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 5500))
+    await route.fulfill({ json: deals })
+  })
+  await page.goto('/')
+  const notice = page.getByText(/despertando el servidor/i)
+  await expect(notice).toBeVisible({ timeout: 6000 })
+  await expect(notice).toBeHidden({ timeout: 8000 })
+  await expect(page.getByText('Balatro').first()).toBeVisible()
+})

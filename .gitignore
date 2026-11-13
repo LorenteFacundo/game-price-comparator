@@ -9,3 +9,6 @@ coverage/
 frontend/playwright-report/
 frontend/test-results/
 .DS_Store
+
+# Adjuntos locales de herramientas
+.codex-remote-attachments/

@@ -12,6 +12,9 @@ const emptySearch = { results: [], usdRate: 0, officialRate: 0, cardRate: 0, tax
 const emptyDeals = { featured: [], free: [], discounts: [], officialRate: 0, cardRate: 0, taxRate: 0, ratesUpdatedAt: '', ratesStale: false, updatedAt: '', warnings: [] }
 const emptyDiscover = { popular: [], mostPlayed: [], updatedAt: '', warnings: [] }
 const refreshInterval = 5 * 60 * 1000
+const wakeUpNoticeDelay = 4000
+const maxStartupRetries = 2
+const startupRetryDelay = 3000
 
 function savedSearches(items, query) {
   return [query, ...items.filter((item) => item.toLowerCase() !== query.toLowerCase())].slice(0, 6)
@@ -20,12 +23,12 @@ function savedSearches(items, query) {
 export default function App() {
   const initialQuery = new URLSearchParams(window.location.search).get('q') || ''
   const [query, setQuery] = useState(initialQuery)
-	const [search, setSearch] = useState(emptySearch)
-	const [hasSearched, setHasSearched] = useState(Boolean(initialQuery))
+  const [search, setSearch] = useState(emptySearch)
+  const [hasSearched, setHasSearched] = useState(Boolean(initialQuery))
   const [loading, setLoading] = useState(false)
-	const [deals, setDeals] = useState(emptyDeals)
+  const [deals, setDeals] = useState(emptyDeals)
   const [dealsLoading, setDealsLoading] = useState(true)
-	const [discover, setDiscover] = useState(emptyDiscover)
+  const [discover, setDiscover] = useState(emptyDiscover)
   const [discoverLoading, setDiscoverLoading] = useState(true)
   const [error, setError] = useState('')
   const [currency, setCurrency] = useLocalStorage('pricepulse-currency', 'ARS')
@@ -34,8 +37,16 @@ export default function App() {
   const [health, setHealth] = useState({ state: 'checking', data: null, message: '' })
   const [support, setSupport] = useState({ open: false, view: 'feedback', context: null })
   const requestRef = useRef(null)
-	const restoredSearchRef = useRef(false)
-	const homepageRefreshRef = useRef(0)
+  const restoredSearchRef = useRef(false)
+  const homepageRefreshRef = useRef(0)
+  const [slowRequest, setSlowRequest] = useState(false)
+  const waitingForAPI = loading || dealsLoading || discoverLoading
+
+  useEffect(() => {
+    if (!waitingForAPI) return undefined
+    const timer = window.setTimeout(() => setSlowRequest(true), wakeUpNoticeDelay)
+    return () => { window.clearTimeout(timer); setSlowRequest(false) }
+  }, [waitingForAPI])
 
   const runSearch = useCallback(async (nextQuery) => {
     const cleanQuery = nextQuery.trim()
@@ -43,8 +54,8 @@ export default function App() {
     requestRef.current?.abort()
     const controller = new AbortController()
     requestRef.current = controller
-		setLoading(true)
-		setHasSearched(true)
+    setLoading(true)
+    setHasSearched(true)
     setError('')
     setQuery(cleanQuery)
     const params = new URLSearchParams(window.location.search)
@@ -53,7 +64,7 @@ export default function App() {
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     try {
       const data = await searchGames(cleanQuery, controller.signal)
-		  setSearch({ results: data.results || [], usdRate: data.usd_rate || 0, officialRate: data.official_rate || 0, cardRate: data.card_rate || 0, taxRate: data.tax_rate || 0, ratesUpdatedAt: data.rates_updated_at || '', ratesStale: Boolean(data.rates_stale), updatedAt: data.updated_at || '', warnings: data.warnings || [] })
+      setSearch({ results: data.results || [], usdRate: data.usd_rate || 0, officialRate: data.official_rate || 0, cardRate: data.card_rate || 0, taxRate: data.tax_rate || 0, ratesUpdatedAt: data.rates_updated_at || '', ratesStale: Boolean(data.rates_stale), updatedAt: data.updated_at || '', warnings: data.warnings || [] })
       setHistory((items) => savedSearches(items, cleanQuery))
     } catch (requestError) {
       if (requestError.name !== 'CanceledError') {
@@ -65,25 +76,34 @@ export default function App() {
     }
   }, [setHistory])
 
-	useEffect(() => {
-	  const controller = new AbortController()
-	  async function refreshHomepage(force = false) {
-		if (document.hidden || (!force && Date.now() - homepageRefreshRef.current < refreshInterval)) return
-		homepageRefreshRef.current = Date.now()
-		const [dealsResult, discoverResult] = await Promise.allSettled([getDeals(controller.signal), getDiscover(controller.signal)])
-		if (dealsResult.status === 'fulfilled') setDeals(dealsResult.value)
-		else if (dealsResult.reason?.name !== 'CanceledError') setDeals((current) => ({ ...current, warnings: ['No pudimos actualizar las ofertas.'] }))
-		if (discoverResult.status === 'fulfilled') setDiscover(discoverResult.value)
-		else if (discoverResult.reason?.name !== 'CanceledError') setDiscover((current) => ({ ...current, warnings: ['No pudimos actualizar los rankings.'] }))
-		setDealsLoading(false)
-		setDiscoverLoading(false)
-	  }
-	  refreshHomepage(true)
-	  const interval = window.setInterval(() => refreshHomepage(), refreshInterval)
-	  const onVisibilityChange = () => { if (!document.hidden) refreshHomepage() }
-	  document.addEventListener('visibilitychange', onVisibilityChange)
-	  return () => { controller.abort(); window.clearInterval(interval); document.removeEventListener('visibilitychange', onVisibilityChange) }
-	}, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    let retryTimer = 0
+    async function refreshHomepage(force = false, attempt = 0) {
+      if (document.hidden || (!force && Date.now() - homepageRefreshRef.current < refreshInterval)) return
+      homepageRefreshRef.current = Date.now()
+      const [dealsResult, discoverResult] = await Promise.allSettled([getDeals(controller.signal), getDiscover(controller.signal)])
+      if (controller.signal.aborted) return
+      // El backend gratuito se duerme sin tráfico y puede tardar ~30-50 s en
+      // despertar. En la carga inicial reintentamos antes de mostrar un error.
+      const bothFailed = [dealsResult, discoverResult].every((result) => result.status === 'rejected' && result.reason?.name !== 'CanceledError')
+      if (bothFailed && attempt < maxStartupRetries && !controller.signal.aborted) {
+        retryTimer = window.setTimeout(() => refreshHomepage(true, attempt + 1), startupRetryDelay)
+        return
+      }
+      if (dealsResult.status === 'fulfilled') setDeals(dealsResult.value)
+      else if (dealsResult.reason?.name !== 'CanceledError') setDeals((current) => ({ ...current, warnings: ['No pudimos actualizar las ofertas.'] }))
+      if (discoverResult.status === 'fulfilled') setDiscover(discoverResult.value)
+      else if (discoverResult.reason?.name !== 'CanceledError') setDiscover((current) => ({ ...current, warnings: ['No pudimos actualizar los rankings.'] }))
+      setDealsLoading(false)
+      setDiscoverLoading(false)
+    }
+    refreshHomepage(true)
+    const interval = window.setInterval(() => refreshHomepage(), refreshInterval)
+    const onVisibilityChange = () => { if (!document.hidden) refreshHomepage() }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => { controller.abort(); window.clearTimeout(retryTimer); window.clearInterval(interval); document.removeEventListener('visibilitychange', onVisibilityChange) }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -120,7 +140,7 @@ export default function App() {
   const taxPercent = Math.round(search.taxRate * 100)
   const formattedCardRate = search.cardRate > 0 ? formatRate(search.cardRate) : 'no disponible'
   const formattedOfficialRate = search.officialRate > 0 ? formatRate(search.officialRate) : 'no disponible'
-	const updates = { search: search.updatedAt, deals: deals.updatedAt, discover: discover.updatedAt, rates: search.ratesUpdatedAt || deals.ratesUpdatedAt }
+  const updates = { search: search.updatedAt, deals: deals.updatedAt, discover: discover.updatedAt, rates: search.ratesUpdatedAt || deals.ratesUpdatedAt }
   const sourceWarnings = [...new Set([...(search.warnings || []), ...(deals.warnings || []), ...(discover.warnings || [])])]
   const openSupport = useCallback((view = 'feedback', context = null) => setSupport({ open: true, view, context }), [])
   const closeSupport = useCallback(() => setSupport((current) => ({ ...current, open: false })), [])
@@ -138,6 +158,7 @@ export default function App() {
 
         {history.length > 0 && !hasSearched && <section className="recent-searches" aria-label="Búsquedas recientes"><span>Volver a buscar:</span>{history.map((item) => <button type="button" key={item} onClick={() => runSearch(item)}>{item}</button>)}</section>}
 
+        {waitingForAPI && slowRequest && <div className="notice notice-waking" role="status" aria-live="polite"><span className="pulse-dot" /><span>Estamos despertando el servidor (corre en un plan gratuito). La primera carga puede tardar hasta un minuto; después es instantánea.</span></div>}
         {error && <div className="notice notice-error" role="alert"><span>{error}</span><button type="button" onClick={() => runSearch(query)}>Reintentar</button></div>}
         {search.warnings.map((warning) => <div className="notice" role="status" aria-live="polite" key={warning}>{warning}</div>)}
 

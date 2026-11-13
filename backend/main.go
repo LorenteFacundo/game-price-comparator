@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"game-price-comparator/handlers"
+	"game-price-comparator/middleware"
 	"game-price-comparator/services"
 	"github.com/joho/godotenv"
 	"github.com/rs/cors"
@@ -33,15 +34,18 @@ func main() {
 	searchHandler := handlers.NewSearchHandler(services.NewITADService(apiKey), services.NewCurrencyService(), services.NewSteamService(), taxRateFromEnv())
 	startedAt := time.Now().UTC()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/search", searchHandler.Handle)
-	mux.HandleFunc("/api/deals", searchHandler.HandleDeals)
-	mux.HandleFunc("/api/discover", searchHandler.HandleDiscover)
+	// Límite por IP más un tope global para proteger la cuota de ITAD/Steam.
+	// /api/health queda afuera para que los monitores no consuman el cupo.
+	limiter := middleware.NewRateLimiter(middleware.Config{PerIPPerMinute: 40, PerIPBurst: 20, GlobalPerMinute: 600, GlobalBurst: 100})
+	mux.Handle("/api/search", limiter.Middleware(http.HandlerFunc(searchHandler.Handle)))
+	mux.Handle("/api/deals", limiter.Middleware(http.HandlerFunc(searchHandler.HandleDeals)))
+	mux.Handle("/api/discover", limiter.Middleware(http.HandlerFunc(searchHandler.HandleDiscover)))
 	mux.HandleFunc("/api/health", healthHandler(startedAt, versionFromEnv()))
 	allowedOrigins := []string{"http://localhost:5173", "http://localhost:3000"}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
 		allowedOrigins = append(allowedOrigins, frontendURL)
 	}
-	handler := withObservability(cors.New(cors.Options{AllowedOrigins: allowedOrigins, AllowedMethods: []string{http.MethodGet, http.MethodHead}, AllowedHeaders: []string{"Content-Type", "X-Request-ID"}, ExposedHeaders: []string{"X-Request-ID"}, MaxAge: 600}).Handler(mux))
+	handler := withObservability(cors.New(cors.Options{AllowedOrigins: allowedOrigins, AllowedMethods: []string{http.MethodGet, http.MethodHead}, AllowedHeaders: []string{"Content-Type", "X-Request-ID"}, ExposedHeaders: []string{"X-Request-ID", "Retry-After"}, MaxAge: 600}).Handler(mux))
 	server := &http.Server{Addr: ":" + port, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API escuchando en http://localhost:%s", port)
 	log.Fatal(server.ListenAndServe())

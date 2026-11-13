@@ -4,7 +4,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:80
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 45000, // margen para el arranque en frío del backend gratuito
 })
 
 function messageFrom(error, fallback) {
@@ -38,11 +38,11 @@ export async function getDeals(signal) {
       featured: data.featured || [],
       free: data.free || [],
       discounts: data.discounts || [],
-	  officialRate: data.official_rate || 0,
-	  cardRate: data.card_rate || 0,
-	  taxRate: data.tax_rate || 0,
-	  ratesUpdatedAt: data.rates_updated_at || '',
-	  ratesStale: Boolean(data.rates_stale),
+    officialRate: data.official_rate || 0,
+    cardRate: data.card_rate || 0,
+    taxRate: data.tax_rate || 0,
+    ratesUpdatedAt: data.rates_updated_at || '',
+    ratesStale: Boolean(data.rates_stale),
       updatedAt: data.updated_at || '',
       warnings: data.warnings || [],
     }
@@ -63,8 +63,8 @@ export async function getDiscover(signal) {
 }
 
 export function formatMoney(amount, currency) {
-	if (!Number.isFinite(amount) || amount < 0) return 'Sin precio'
-	if (amount === 0) return 'Gratis'
+  if (!Number.isFinite(amount) || amount < 0) return 'Sin precio'
+  if (amount === 0) return 'Gratis'
   try {
     return new Intl.NumberFormat(currency === 'ARS' ? 'es-AR' : 'en-US', {
       style: 'currency',
@@ -77,10 +77,10 @@ export function formatMoney(amount, currency) {
 }
 
 export function displayFinalMoney(price, preferredCurrency, officialRate, cardRate, taxRate) {
-	if (price?.price === null || price?.price === undefined || !Number.isFinite(price.price) || price.price < 0 || !price?.currency) return { label: 'Sin precio', converted: false, includesTax: false, note: '' }
-	const currency = price?.currency?.toUpperCase()
-	const totalRate = cardRate > 0 ? cardRate : officialRate * (1 + taxRate)
-	if (price.price === 0) return { label: 'Gratis', converted: false, includesTax: false, note: 'gratis ahora' }
+  if (price?.price === null || price?.price === undefined || !Number.isFinite(price.price) || price.price < 0 || !price?.currency) return { label: 'Sin precio', converted: false, includesTax: false, note: '' }
+  const currency = price?.currency?.toUpperCase()
+  const totalRate = cardRate > 0 ? cardRate : officialRate * (1 + taxRate)
+  if (price.price === 0) return { label: 'Gratis', converted: false, includesTax: false, note: 'gratis ahora' }
 
   if (preferredCurrency === 'USD') {
     return { label: formatMoney(price.price, 'USD'), converted: false, includesTax: false, note: 'precio publicado en USD' }
