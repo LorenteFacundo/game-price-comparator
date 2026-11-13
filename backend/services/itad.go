@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"game-price-comparator/models"
@@ -24,8 +25,14 @@ var featuredStores = map[string]struct{}{
 }
 
 type ITADService struct {
-	apiKey string
-	client *http.Client
+	apiKey        string
+	client        *http.Client
+	baseURL       string
+	steamStoreURL string
+
+	rateMu sync.Mutex
+	rate   float64
+	rateAt time.Time
 }
 type itadMoney struct {
 	Amount   float64 `json:"amount"`
@@ -71,7 +78,7 @@ type itadPopularGame struct {
 }
 
 func NewITADService(apiKey string) *ITADService {
-	return &ITADService{apiKey: apiKey, client: &http.Client{Timeout: 12 * time.Second}}
+	return &ITADService{apiKey: apiKey, client: &http.Client{Timeout: 12 * time.Second}, baseURL: itadBaseURL, steamStoreURL: "https://store.steampowered.com"}
 }
 
 func (s *ITADService) Search(ctx context.Context, query string) ([]models.GameResult, error) {
@@ -90,6 +97,7 @@ func (s *ITADService) Search(ctx context.Context, query string) ([]models.GameRe
 	if err != nil {
 		return nil, err
 	}
+	prices = s.restoreDollarPrices(ctx, prices)
 	priceMap := make(map[string][]models.StorePrice, len(prices))
 	for _, result := range prices {
 		storePrices := make([]models.StorePrice, 0, len(result.Deals))
@@ -118,7 +126,7 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 	}
 	// Pedimos una muestra amplia porque ITAD ordena por descuento y las primeras
 	// posiciones suelen ser juegos gratuitos con 100% de descuento.
-	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=200&sort=-cut", itadBaseURL), nil)
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/deals/v2?country=AR&limit=200&sort=-cut", s.baseURL), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +134,10 @@ func (s *ITADService) GetDeals(ctx context.Context, limit int) ([]models.Feature
 	if err := s.doJSON(req, &response); err != nil {
 		return nil, err
 	}
+	rate := s.arsPerUSD(ctx)
 	candidates := make([]models.FeaturedDeal, 0, len(response.List))
 	for _, item := range response.List {
+		item.Deal = restoreDollarDeal(item.Deal, rate)
 		if !isEligibleFeaturedDeal(item.Deal) {
 			continue
 		}
@@ -158,7 +168,7 @@ func (s *ITADService) GetPopularDeals(ctx context.Context, limit int) ([]models.
 	if limit > 100 {
 		limit = 100
 	}
-	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/stats/most-popular/v1?limit=%d", itadBaseURL, limit), nil)
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/stats/most-popular/v1?limit=%d", s.baseURL, limit), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +192,7 @@ func (s *ITADService) GetPopularDeals(ctx context.Context, limit int) ([]models.
 	if err != nil {
 		return nil, err
 	}
-	return popularDealsFromPrices(prices, byID), nil
+	return popularDealsFromPrices(s.restoreDollarPrices(ctx, prices), byID), nil
 }
 
 func popularDealsFromPrices(prices []itadPriceResult, games map[string]itadPopularGame) []models.FeaturedDeal {
@@ -206,7 +216,7 @@ func popularDealsFromPrices(prices []itadPriceResult, games map[string]itadPopul
 }
 
 func (s *ITADService) searchGames(ctx context.Context, query string) ([]itadSearchResult, error) {
-	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/games/search/v1?title=%s&results=5", itadBaseURL, url.QueryEscape(query)), nil)
+	req, err := s.newRequest(ctx, http.MethodGet, fmt.Sprintf("%s/games/search/v1?title=%s&results=5", s.baseURL, url.QueryEscape(query)), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +231,7 @@ func (s *ITADService) getPrices(ctx context.Context, ids []string) ([]itadPriceR
 	if err != nil {
 		return nil, err
 	}
-	req, err := s.newRequest(ctx, http.MethodPost, itadBaseURL+"/games/prices/v3?country=AR", bytes.NewReader(body))
+	req, err := s.newRequest(ctx, http.MethodPost, s.baseURL+"/games/prices/v3?country=AR", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +310,7 @@ func (s *ITADService) PricesForSteamApps(ctx context.Context, appIDs []string) (
 	if err != nil {
 		return nil, err
 	}
-	req, err := s.newRequest(ctx, http.MethodPost, fmt.Sprintf("%s/lookup/id/shop/%d/v1", itadBaseURL, steamShopID), bytes.NewReader(body))
+	req, err := s.newRequest(ctx, http.MethodPost, fmt.Sprintf("%s/lookup/id/shop/%d/v1", s.baseURL, steamShopID), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -326,6 +336,7 @@ func (s *ITADService) PricesForSteamApps(ctx context.Context, appIDs []string) (
 	if err != nil {
 		return nil, err
 	}
+	results = s.restoreDollarPrices(ctx, results)
 	for _, result := range results {
 		appID, ok := appByITAD[result.ID]
 		if !ok {
