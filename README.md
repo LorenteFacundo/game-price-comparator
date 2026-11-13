@@ -31,7 +31,7 @@ En Argentina, el precio que ves en una tienda no es el que pagás: algunas tiend
 - 🏷️ **Ofertas curadas** de Steam, Epic y Microsoft, rankeadas por popularidad, reseñas y jugadores activos (sin perder los juegos gratis).
 - 📈 **Populares y más jugados** de Steam, con un clic para comparar precios.
 - ⭐ **Favoritos e historial** guardados sólo en tu navegador (no hay cuentas).
-- 🤖 **Bot de Discord**: `/precio juego:Hades` en cualquier servidor, con la misma lógica que la web.
+- 🤖 **Bot de Discord**: `/precio`, `/ofertas`, `/gratis` y `/populares` en cualquier servidor, con la misma lógica que la web.
 
 ## Arquitectura
 

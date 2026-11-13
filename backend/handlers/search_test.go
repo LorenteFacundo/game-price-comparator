@@ -224,3 +224,21 @@ func TestDiscoverKeepsRankingsWhenPricesFail(t *testing.T) {
 		t.Fatalf("expected rankings with a warning, got status=%d body=%+v", response.Code, body)
 	}
 }
+
+func TestDiscoverPrefersSteamWhenAnotherStoreTies(t *testing.T) {
+	handler := NewSearchHandler(
+		fakeITAD{steamPrices: map[string][]models.StorePrice{
+			"100": {{StoreName: "Steam", Price: 30, Currency: "USD"}, {StoreName: "Epic Game Store", Price: 30, Currency: "USD"}},
+		}},
+		fakeCurrency{rates: services.ExchangeRates{Official: 1000, Blue: 1200}},
+		fakeSteam{mostPlayed: []models.RankedGame{{ID: "100", Title: "Tie"}}},
+		0.21,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleDiscover(response, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
+	var body models.DiscoverResponse
+	_ = json.NewDecoder(response.Body).Decode(&body)
+	if best := body.MostPlayed[0].BestPrice; best == nil || best.StoreName != "Steam" {
+		t.Fatalf("expected Steam to win a tie, got %+v", best)
+	}
+}

@@ -2,6 +2,14 @@
 
 `/precio juego:Hades` responde en el canal con los precios finales estimados para Argentina. Consulta exactamente `GET /api/search` de PricePulse: los precios publicados en ARS se conservan, los USD se convierten con dólar tarjeta e IVA y `0` se muestra como **Gratis**.
 
+| Comando | Qué hace |
+|---|---|
+| `/precio juego:Hades` | Precio en cada tienda, la más barata y botones para recorrer resultados |
+| `/ofertas` | Las mejores ofertas del momento (mismo ranking que la portada) |
+| `/gratis` | Juegos gratis por tiempo limitado, con fecha de vencimiento |
+| `/populares` | Los más vendidos de Steam con su precio y dónde está más barato |
+| `/ayuda` | Explica los comandos (respuesta privada) |
+
 El Worker no usa Gateway ni base de datos. Discord recibe un acuse en menos de tres segundos y la consulta real viaja por una Cloudflare Queue, por lo que sigue funcionando aunque Render esté arrancando. Los términos buscados y los IDs de usuarios no se registran.
 
 ## Configuración única
@@ -11,7 +19,7 @@ El Worker no usa Gateway ni base de datos. Discord recibe un acuse en menos de t
 3. Creá una cuenta de Cloudflare y ejecutá desde esta carpeta `npm install`, `npx wrangler login` y `npx wrangler queues create pricepulse-discord-jobs`.
 4. Configurá las variables no secretas del Worker en Cloudflare: `BACKEND_URL`, `FRONTEND_URL`, `DISCORD_APPLICATION_ID` y `DISCORD_PUBLIC_KEY`. Usá las URLs públicas reales, sin barra final.
 5. Desplegá con `npm run deploy`. Copiá `https://<tu-worker>/interactions` como **Interactions Endpoint URL** en Discord. Discord validará el PING automáticamente.
-6. Registrá el comando con `DISCORD_APPLICATION_ID=... DISCORD_TOKEN=... npm run register-command`. El script usa `PUT` para dejar un solo comando global `/precio`, así que se puede ejecutar todas las veces que haga falta.
+6. Registrá el comando con `DISCORD_APPLICATION_ID=... DISCORD_TOKEN=... npm run register-command`. El script usa `PUT` para dejar exactamente los comandos globales del bot, así que se puede ejecutar todas las veces que haga falta.
 7. Usá la URL de instalación de Discord y agregá PricePulse a cualquier servidor. Los comandos globales pueden demorar unos minutos en aparecer.
 
 ## Despliegue continuo

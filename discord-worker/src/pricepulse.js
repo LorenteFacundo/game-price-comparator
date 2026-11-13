@@ -110,7 +110,7 @@ function storeKind(storeName) {
   return PRIORITY_STORES.find((store) => normalized.includes(store)) || "";
 }
 
-function priceInARS(price, cardRate) {
+export function priceInARS(price, cardRate) {
   if (!Number.isFinite(price.price) || price.price < 0) return null;
   const currency = (price.currency || "").toUpperCase();
   if (currency === "ARS") return price.price;
@@ -142,7 +142,7 @@ export function selectPrices(prices, cardRate) {
   return selected;
 }
 
-function formatARS(value) {
+export function formatARS(value) {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
@@ -150,7 +150,7 @@ function formatARS(value) {
   }).format(value);
 }
 
-function validUrl(value) {
+export function validUrl(value) {
   try {
     const url = new URL(value);
     return url.protocol === "https:" || url.protocol === "http:";

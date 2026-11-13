@@ -386,7 +386,6 @@ func (h *SearchHandler) attachRankingPrices(ctx context.Context, response *model
 				continue
 			}
 			sorted, best := sortPricesAndPickBest(prices, comparisonRate)
-			games[index].BestPrice = best
 			for _, price := range sorted {
 				if strings.EqualFold(price.StoreName, "Steam") {
 					steam := price
@@ -394,6 +393,17 @@ func (h *SearchHandler) attachRankingPrices(ctx context.Context, response *model
 					break
 				}
 			}
+			// Ante un empate de precio con otra tienda, Steam cuenta como la más
+			// barata: así no se muestra un "más barato" que en realidad cuesta igual.
+			if best != nil && games[index].SteamPrice != nil {
+				bestARS, bestOK := normalizedARS(*best, comparisonRate)
+				steamARS, steamOK := normalizedARS(*games[index].SteamPrice, comparisonRate)
+				if bestOK && steamOK && steamARS <= bestARS {
+					steam := *games[index].SteamPrice
+					best = &steam
+				}
+			}
+			games[index].BestPrice = best
 		}
 	}
 }

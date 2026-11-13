@@ -11,6 +11,7 @@ import {
   validateQuery,
   verifyDiscordSignature,
 } from "./pricepulse.js";
+import { LIST_COMMANDS, buildListMessage, helpMessage } from "./lists.js";
 
 const USER_AGENT = "DiscordBot (https://github.com/LorenteFacundo/game-price-comparator, 1.0)";
 
@@ -45,7 +46,19 @@ export async function handleInteraction(request, env, { verify = verifyDiscordSi
   if (!validWorkerConfig(env)) return PRIVATE("PricePulse no está configurado todavía. Avisale al administrador del bot.");
 
   if (interaction.type === DISCORD.APPLICATION_COMMAND) {
-    if (interaction.data?.name !== "precio") return PRIVATE("Ese comando no existe en PricePulse.");
+    const command = interaction.data?.name;
+    if (command === "ayuda") {
+      return json({ type: DISCORD.CHANNEL_MESSAGE, data: { ...helpMessage(env.FRONTEND_URL), flags: DISCORD.EPHEMERAL } });
+    }
+    if (LIST_COMMANDS.includes(command)) {
+      await enqueue(env, {
+        kind: command,
+        application_id: interaction.application_id,
+        interaction_token: interaction.token,
+      });
+      return json({ type: DISCORD.DEFERRED_CHANNEL_MESSAGE });
+    }
+    if (command !== "precio") return PRIVATE("Ese comando no existe en PricePulse. Probá con /ayuda.");
     const query = getQuery(interaction);
     const error = validateQuery(query);
     if (error) return PRIVATE(error);
@@ -96,6 +109,17 @@ async function editOriginal(job, payload, fetchImpl = fetch) {
 }
 
 export async function processJob(job, env, { fetchImpl = fetch } = {}) {
+  if (LIST_COMMANDS.includes(job.kind)) {
+    let payload;
+    try {
+      payload = await buildListMessage(job.kind, env, fetchImpl);
+    } catch (error) {
+      console.error("pricepulse_backend_error", error?.message);
+      payload = renderFailure("No pude cargar la lista ahora. Probá de nuevo en un minuto.");
+    }
+    await editOriginal(job, payload, fetchImpl);
+    return;
+  }
   let payload;
   try {
     const response = await fetchSearch(env.BACKEND_URL, job.query, fetchImpl);

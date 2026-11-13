@@ -16,6 +16,22 @@ const commands = [{
     required: true,
     max_length: 50,
   }],
+}, {
+  name: "ofertas",
+  description: "Las mejores ofertas del momento en Steam, Epic y Microsoft",
+  type: 1,
+}, {
+  name: "gratis",
+  description: "Juegos gratis por tiempo limitado",
+  type: 1,
+}, {
+  name: "populares",
+  description: "Los más vendidos de Steam con su precio y dónde está más barato",
+  type: 1,
+}, {
+  name: "ayuda",
+  description: "Qué hace PricePulse y cómo usarlo",
+  type: 1,
 }];
 
 const response = await fetch(`https://discord.com/api/v10/applications/${applicationId}/commands`, {
@@ -28,7 +44,7 @@ const response = await fetch(`https://discord.com/api/v10/applications/${applica
 });
 
 if (!response.ok) {
-  throw new Error(`No se pudo registrar /precio (${response.status}): ${await response.text()}`);
+  throw new Error(`No se pudieron registrar los comandos (${response.status}): ${await response.text()}`);
 }
 
-console.log("Comando global /precio registrado.");
+console.log(`Comandos globales registrados: ${commands.map((command) => `/${command.name}`).join(", ")}.`);
