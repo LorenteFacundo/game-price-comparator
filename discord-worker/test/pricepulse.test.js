@@ -168,12 +168,14 @@ test("queue returns friendly no-results and provider-failure messages without ex
   assert.equal(outage.acked, 1);
 });
 
-test("edits Discord with a bot User-Agent", async () => {
+test("edits the original Discord response with a bot User-Agent", async () => {
   const env = { BACKEND_URL: "https://api.example", FRONTEND_URL: "https://web.example" };
   let discordHeaders;
+  let discordURL;
   const fetchImpl = async (url, init = {}) => {
     if (String(url).startsWith("https://discord.com")) {
       discordHeaders = init.headers;
+      discordURL = String(url);
       return new Response("{}", { status: 200 });
     }
     return new Response(JSON.stringify({ results: [] }), { status: 200 });
@@ -181,4 +183,10 @@ test("edits Discord with a bot User-Agent", async () => {
   const message = { body: { application_id: "app-1", interaction_token: "token", query: "Hades", result_index: 0, requester_id: "123" }, ack() {}, retry() {} };
   await consumeQueue({ messages: [message] }, env, { fetchImpl });
   assert.match(discordHeaders["user-agent"], /^DiscordBot \(/);
+  assert.equal(discordURL, "https://discord.com/api/v10/webhooks/app-1/token/messages/@original");
+});
+
+test("malformed signatures are rejected instead of crashing", () => {
+  assert.equal(verifyDiscordSignature("ab".repeat(32), "00", "1", "{}"), false);
+  assert.equal(verifyDiscordSignature("ab", "00".repeat(64), "1", "{}"), false);
 });

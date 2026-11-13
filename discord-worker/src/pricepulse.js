@@ -37,6 +37,9 @@ export function verifyDiscordSignature(publicKey, signature, timestamp, body) {
   const publicKeyBytes = hexToBytes(publicKey || "");
   const signatureBytes = hexToBytes(signature || "");
   if (!publicKeyBytes || !signatureBytes || !timestamp) return false;
+  // tweetnacl lanza una excepción si la firma o la clave no tienen el largo
+  // esperado; un pedido malformado debe responder 401, no 500.
+  if (publicKeyBytes.length !== nacl.sign.publicKeyLength || signatureBytes.length !== nacl.sign.signatureLength) return false;
   return nacl.sign.detached.verify(
     encoder.encode(`${timestamp}${body}`),
     signatureBytes,

@@ -81,7 +81,7 @@ export async function handleInteraction(request, env, { verify = verifyDiscordSi
 }
 
 async function editOriginal(job, payload, fetchImpl = fetch) {
-  const endpoint = `https://discord.com/api/v10/webhooks/${job.application_id}/interactions/${job.interaction_token}/messages/@original`;
+  const endpoint = `https://discord.com/api/v10/webhooks/${job.application_id}/${job.interaction_token}/messages/@original`;
   const response = await fetchImpl(endpoint, {
     method: "PATCH",
     // Discord exige un User-Agent identificable; los Workers no envían uno por
