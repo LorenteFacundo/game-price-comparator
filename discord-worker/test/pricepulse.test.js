@@ -190,3 +190,12 @@ test("malformed signatures are rejected instead of crashing", () => {
   assert.equal(verifyDiscordSignature("ab".repeat(32), "00", "1", "{}"), false);
   assert.equal(verifyDiscordSignature("ab", "00".repeat(64), "1", "{}"), false);
 });
+
+test("flagged prices never appear as the cheapest store", () => {
+  const selection = selectPrices([
+    { store_name: "Microsoft Store", price: 359, currency: "ARS", warning: "Precio inusualmente bajo" },
+    { store_name: "Steam", price: 7700, currency: "ARS" },
+  ], 1500);
+  assert.equal(selection[0].store_name, "Steam");
+  assert.ok(selection.every((price) => !price.warning));
+});

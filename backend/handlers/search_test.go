@@ -65,7 +65,7 @@ func (f fakeSteam) GetMostPlayed(context.Context, int) ([]models.RankedGame, err
 func TestSortPricesAndPickBestPrefersLowestNormalizedPrice(t *testing.T) {
 	prices := []models.StorePrice{
 		{StoreName: "Steam", Price: 1.24, Currency: "USD"},
-		{StoreName: "Microsoft Store", Price: 359, Currency: "ARS"},
+		{StoreName: "Microsoft Store", Price: 359, Regular: 359, Currency: "ARS"},
 		{StoreName: "Eneba", URL: "https://example.com"},
 		{StoreName: "MundoSteam", URL: "https://example.com"},
 	}
@@ -240,5 +240,40 @@ func TestDiscoverPrefersSteamWhenAnotherStoreTies(t *testing.T) {
 	_ = json.NewDecoder(response.Body).Decode(&body)
 	if best := body.MostPlayed[0].BestPrice; best == nil || best.StoreName != "Steam" {
 		t.Fatalf("expected Steam to win a tie, got %+v", best)
+	}
+}
+
+func TestSuspiciouslyLowPriceDoesNotWinBestDeal(t *testing.T) {
+	prices := flagSuspiciousPrices([]models.StorePrice{
+		{StoreName: "Microsoft Store", Price: 359, Regular: 359, Currency: "ARS"},
+		{StoreName: "Epic Game Store", Price: 7700, Currency: "ARS"},
+		{StoreName: "Steam", Price: 7700, Currency: "ARS"},
+		{StoreName: "Free", Price: 0, Currency: "ARS"},
+	}, 1452)
+	if prices[0].Warning == "" || prices[1].Warning != "" || prices[3].Warning != "" {
+		t.Fatalf("expected only the outlier to be flagged: %+v", prices)
+	}
+	if prices[0].Price != 359 {
+		t.Fatal("flagging must never change the published price")
+	}
+	_, best := sortPricesAndPickBest(prices[:3], 1452)
+	if best == nil || best.StoreName == "Microsoft Store" {
+		t.Fatalf("outlier must not be the best deal, got %+v", best)
+	}
+}
+
+func TestRealDiscountsAreNotFlagged(t *testing.T) {
+	prices := flagSuspiciousPrices([]models.StorePrice{
+		{StoreName: "Steam", Price: 1, Regular: 10, Currency: "USD"},
+		{StoreName: "Epic", Price: 10, Currency: "USD"},
+		{StoreName: "GOG", Price: 12, Currency: "USD"},
+	}, 1452)
+	for _, price := range prices {
+		if price.Warning != "" {
+			t.Fatalf("a real 90%% discount should not be flagged: %+v", prices)
+		}
+	}
+	if flagged := flagSuspiciousPrices([]models.StorePrice{{StoreName: "A", Price: 1, Currency: "USD"}, {StoreName: "B", Price: 100, Currency: "USD"}}, 1452); flagged[0].Warning != "" {
+		t.Fatal("two stores are not enough evidence to flag a price")
 	}
 }

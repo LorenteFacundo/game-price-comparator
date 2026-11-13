@@ -66,7 +66,8 @@ export function formatMoney(amount, currency) {
   if (!Number.isFinite(amount) || amount < 0) return 'Sin precio'
   if (amount === 0) return 'Gratis'
   try {
-    return new Intl.NumberFormat(currency === 'ARS' ? 'es-AR' : 'en-US', {
+    // es-AR distingue las monedas: "$ 12.269" (pesos) frente a "US$ 4,79".
+    return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: currency || 'USD',
       maximumFractionDigits: currency === 'ARS' ? 0 : 2,
@@ -83,6 +84,8 @@ export function displayFinalMoney(price, preferredCurrency, officialRate, cardRa
   if (price.price === 0) return { label: 'Gratis', converted: false, includesTax: false, note: 'gratis ahora' }
 
   if (preferredCurrency === 'USD') {
+    // Nunca mostramos un precio en pesos como si fuera en dólares.
+    if (currency !== 'USD') return { label: formatMoney(price.price, currency), converted: false, includesTax: false, note: 'publicado en pesos' }
     return { label: formatMoney(price.price, 'USD'), converted: false, includesTax: false, note: 'precio publicado en USD' }
   }
 

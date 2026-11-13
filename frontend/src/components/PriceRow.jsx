@@ -17,6 +17,7 @@ export default function PriceRow({ gameTitle, price, preferredCurrency, official
         <strong>{shown.label}</strong>
         {regular && <del>{regular.label}</del>}
         <small>{shown.note}</small>
+        {price.warning && <small className="price-warning" role="note">{price.warning}</small>}
       </div>
       <div className="price-actions"><a className="store-link" href={price.url} target="_blank" rel="noopener noreferrer">Ir a tienda <span aria-hidden="true">↗</span></a><button className="report-link" type="button" onClick={() => onReport({ gameTitle, store: price.store_name, displayedPrice: shown.label, sourceURL: price.url })}>Reportar precio</button></div>
     </li>

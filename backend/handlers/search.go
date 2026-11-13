@@ -123,7 +123,8 @@ func (h *SearchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		response.Warnings = append(response.Warnings, h.replaceWithGlobalSteam(r.Context(), response.Results)...)
 	}
 	for index := range response.Results {
-		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(response.Results[index].Prices, comparisonRate)
+		prices := flagSuspiciousPrices(response.Results[index].Prices, comparisonRate)
+		response.Results[index].Prices, response.Results[index].BestDeal = sortPricesAndPickBest(prices, comparisonRate)
 	}
 	h.storeSearch(cacheKey, response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
@@ -385,7 +386,7 @@ func (h *SearchHandler) attachRankingPrices(ctx context.Context, response *model
 			if len(prices) == 0 {
 				continue
 			}
-			sorted, best := sortPricesAndPickBest(prices, comparisonRate)
+			sorted, best := sortPricesAndPickBest(flagSuspiciousPrices(prices, comparisonRate), comparisonRate)
 			for _, price := range sorted {
 				if strings.EqualFold(price.StoreName, "Steam") {
 					steam := price
@@ -482,12 +483,60 @@ func sortPricesAndPickBest(prices []models.StorePrice, usdRate float64) ([]model
 		return strings.ToLower(sorted[i].StoreName) < strings.ToLower(sorted[j].StoreName)
 	})
 	for i := range sorted {
-		if _, ok := normalizedARS(sorted[i], usdRate); ok {
+		if _, ok := normalizedARS(sorted[i], usdRate); ok && sorted[i].Warning == "" {
 			best := sorted[i]
 			return sorted, &best
 		}
 	}
 	return sorted, nil
+}
+
+// suspiciousPriceRatio marca precios pagos cuyo precio actual y precio normal
+// cuestan menos del 20% de la mediana del resto de las tiendas. Suele ser un producto mal asociado (una
+// banda sonora, un DLC o la versión de otro país) y no debe ganar como "más
+// barato". El precio no se modifica: sólo se excluye del ranking y se avisa.
+const suspiciousPriceRatio = 0.2
+
+const suspiciousPriceWarning = "Precio inusualmente bajo: puede ser otro producto. Verificalo en la tienda."
+
+func flagSuspiciousPrices(prices []models.StorePrice, usdRate float64) []models.StorePrice {
+	flagged := append([]models.StorePrice(nil), prices...)
+	values := make([]float64, len(flagged))
+	paid := make([]bool, len(flagged))
+	for i, price := range flagged {
+		value, ok := normalizedARS(price, usdRate)
+		values[i], paid[i] = value, ok && value > 0
+	}
+	for i := range flagged {
+		if !paid[i] {
+			continue
+		}
+		others := make([]float64, 0, len(flagged)-1)
+		for j := range flagged {
+			if j != i && paid[j] {
+				others = append(others, values[j])
+			}
+		}
+		if len(others) < 2 {
+			continue
+		}
+		sort.Float64s(others)
+		median := others[len(others)/2]
+		if len(others)%2 == 0 {
+			median = (others[len(others)/2-1] + others[len(others)/2]) / 2
+		}
+		// Una rebaja real conserva un precio normal parecido al de las otras
+		// tiendas; sólo marcamos si también el precio normal está fuera de rango.
+		regular := flagged[i]
+		if regular.Regular > regular.Price {
+			regular.Price = regular.Regular
+		}
+		regularValue, _ := normalizedARS(regular, usdRate)
+		if values[i] < median*suspiciousPriceRatio && regularValue < median*suspiciousPriceRatio {
+			flagged[i].Warning = suspiciousPriceWarning
+		}
+	}
+	return flagged
 }
 func normalizedARS(price models.StorePrice, usdRate float64) (float64, bool) {
 	switch strings.ToUpper(price.Currency) {

@@ -96,4 +96,7 @@ test("queued list jobs read the matching endpoint and edit the original message"
 test("help lists every command", () => {
   const text = helpMessage(frontendURL).embeds[0].description;
   for (const command of ["/precio", "/ofertas", "/gratis", "/populares"]) assert.ok(text.includes(command), command);
+  assert.match(text, /IsThereAnyDeal/);
+  assert.match(text, /linkedin\.com\/in\//);
+  assert.match(renderDeals(deals, frontendURL).embeds[0].footer.text, /IsThereAnyDeal/);
 });

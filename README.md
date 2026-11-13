@@ -12,11 +12,11 @@
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-cdfc53.svg)](LICENSE)
 
-### [🔗 Probar la demo](https://dondecomprarestejuego.netlify.app/) · [🤖 Bot de Discord](discord-worker/README.md) · [🛠 Mantenimiento](docs/MAINTENANCE.md)
+### [Probar la demo](https://dondecomprarestejuego.netlify.app/) · [Agregar el bot a Discord](https://discord.com/oauth2/authorize?client_id=1548062341973942315) · [Documentación del bot](discord-worker/README.md)
 
 </div>
 
-> **In English:** PricePulse is a video game price comparator for Argentina. A Go API queries IsThereAnyDeal, Steam and an exchange-rate API in parallel, ranks deals by popularity and reviews, and converts USD prices to ARS including taxes. It ships with a React frontend, a Discord bot running on Cloudflare Workers with a job queue, and a CI pipeline with unit and end-to-end tests.
+> **In English:** PricePulse tells you where a video game is cheapest in Argentina. A Go API queries IsThereAnyDeal, Steam and an exchange-rate API in parallel, ranks deals by popularity and reviews, and converts USD prices to ARS including taxes. It ships with a React frontend, a Discord bot running on Cloudflare Workers with a job queue, and a CI pipeline with unit and end-to-end tests.
 
 ---
 
@@ -26,12 +26,25 @@ En Argentina, el precio que ves en una tienda no es el que pagás: algunas tiend
 
 ## Qué hace
 
-- 🔎 **Busca un juego** y muestra el precio en cada tienda, ordenado del más barato al más caro.
-- 💸 **Convierte USD → ARS con impuestos** usando la cotización oficial actualizada; los precios publicados en pesos no se reconvierten.
-- 🏷️ **Ofertas curadas** de Steam, Epic y Microsoft, rankeadas por popularidad, reseñas y jugadores activos (sin perder los juegos gratis).
-- 📈 **Populares y más jugados** de Steam, con un clic para comparar precios.
-- ⭐ **Favoritos e historial** guardados sólo en tu navegador (no hay cuentas).
-- 🤖 **Bot de Discord**: `/precio`, `/ofertas`, `/gratis` y `/populares` en cualquier servidor, con la misma lógica que la web.
+- **Busca un juego** y muestra el precio en cada tienda, ordenado del más barato al más caro.
+- **Convierte USD a ARS con impuestos** usando la cotización oficial actualizada; los precios publicados en pesos no se reconvierten.
+- **Ofertas curadas** de Steam, Epic y Microsoft, rankeadas por popularidad, reseñas y jugadores activos, sin perder los juegos gratis.
+- **Populares y más jugados** de Steam, con su precio y la tienda donde están más baratos.
+- **Detecta precios sospechosos**: si una tienda publica un precio absurdamente bajo (suele ser otro producto mal asociado), se muestra con un aviso pero no gana como "más barato".
+- **Favoritos e historial** guardados sólo en tu navegador; no hay cuentas.
+- **Bot de Discord** con la misma lógica que la web.
+
+## Bot de Discord
+
+[Agregalo a tu servidor](https://discord.com/oauth2/authorize?client_id=1548062341973942315). No pide permisos de administrador.
+
+| Comando | Qué hace |
+|---|---|
+| `/precio juego:Hades` | Precio en cada tienda y cuál es la más barata, con botones para recorrer resultados |
+| `/ofertas` | Las mejores ofertas del momento, en pesos con IVA |
+| `/gratis` | Juegos gratis por tiempo limitado y hasta cuándo |
+| `/populares` | Los más vendidos de Steam con su precio y dónde están más baratos |
+| `/ayuda` | Explica los comandos |
 
 ## Arquitectura
 
@@ -59,6 +72,8 @@ flowchart LR
 | **Rate limiting por IP + tope global** | Token bucket propio (sin dependencias). El tope global protege la cuota de ITAD aunque alguien rote IPs. |
 | **Observabilidad sin datos personales** | Cada request tiene un `X-Request-ID`, se registran ruta, estado y duración, pero nunca los términos buscados. |
 | **Bot asíncrono** | Discord exige responder en 3 s: el Worker verifica la firma Ed25519, responde "pensando…" y procesa la búsqueda desde una cola. |
+| **Reseñas en lote** | Las reseñas de Steam de todas las ofertas se piden en una sola consulta a `IStoreBrowseService`, la API que usa la propia tienda. |
+| **Datos de terceros sin alterar** | Los precios se muestran tal como los publica cada fuente; los valores sospechosos se señalan, nunca se corrigen a mano. |
 
 ## Stack
 
@@ -96,7 +111,7 @@ cd discord-worker && npm ci && npm run lint && npm test
 |---|---|
 | `GET /api/search?q=hades` | Precios de un juego en todas las tiendas, ordenados y con el mejor precio. |
 | `GET /api/deals?limit=12` | Ofertas destacadas, gratis y mayores descuentos. |
-| `GET /api/discover` | Populares y más jugados de Steam. |
+| `GET /api/discover` | Populares y más jugados de Steam, con precio en Steam y el más barato. |
 | `GET /api/health` | Estado, versión y uptime (no consume cuotas externas). |
 
 ## Operación en producción
@@ -110,6 +125,19 @@ cd discord-worker && npm ci && npm run lint && npm test
 - Historial de precios con snapshots periódicos (servicio *ingestor* separado).
 - Alertas de bajada de precio por Discord.
 
+## Fuentes de datos
+
+- Precios y ofertas: [IsThereAnyDeal API](https://docs.isthereanydeal.com/) y [Steam](https://store.steampowered.com/).
+- Cotización del dólar: [Bluelytics](https://bluelytics.com.ar/).
+
+PricePulse no está afiliado a IsThereAnyDeal, Valve, Epic Games ni Microsoft. Los precios son orientativos: verificá siempre el total en la tienda antes de comprar.
+
+## Autor
+
+**Facundo Lorente** · Desarrollador backend · Buenos Aires
+
+[GitHub](https://github.com/LorenteFacundo) · [LinkedIn](https://www.linkedin.com/in/facundo-lorente-692206230)
+
 ## Licencia
 
-[MIT](LICENSE) · Hecho por [Facundo Lorente](https://github.com/LorenteFacundo). Los precios provienen de IsThereAnyDeal y Steam; verificá siempre el total en la tienda antes de comprar.
+[MIT](LICENSE)

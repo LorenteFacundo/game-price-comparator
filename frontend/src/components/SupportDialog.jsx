@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 const repositoryURL = (import.meta.env.VITE_FEEDBACK_REPO_URL || 'https://github.com/LorenteFacundo/game-price-comparator').replace(/\/$/, '')
 
 const changes = [
+  { date: '13 NOV 2026', title: 'Bot con más comandos', detail: 'Además de /precio, el bot de Discord suma /ofertas, /gratis, /populares y /ayuda.' },
+  { date: '13 NOV 2026', title: 'Precios en los rankings', detail: 'Populares y Más jugados muestran el precio en Steam y la tienda más barata.' },
+  { date: '13 NOV 2026', title: 'Ofertas con reseñas', detail: 'El ranking vuelve a usar las reseñas de Steam para destacar juegos bien valorados.' },
 	{ date: '11 SEP 2026', title: 'Comparación más clara', detail: 'La portada muestra de un vistazo que buscamos el menor precio del mismo juego entre varias tiendas.' },
 	{ date: '11 SEP 2026', title: 'Precios y ofertas estables', detail: 'Moneda e impuestos consistentes, juegos gratis visibles y mejor tolerancia a fallos de proveedores.' },
   { date: '28 AGO 2026', title: 'Centro de soporte', detail: 'Reportes de precios, estado del servicio y canal de mejoras desde la app.' },

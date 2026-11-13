@@ -225,3 +225,9 @@ main { padding-top: clamp(1.5rem, 4vw, 3rem); }
 .rank-prices dd { margin: 0; flex: 0 0 auto; color: #f7f4ea; font-size: .86rem; font-weight: 800; }
 .rank-prices .is-best dd { color: #cdfc53; }
 .rank-prices .rank-best-note dt { color: #cdfc53; }
+.footer-credits { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1.5rem; border-top: 1px solid rgba(247, 244, 234, .08); padding-top: 1rem; color: #74786f; font: 500 .6rem/1.5 'DM Mono', monospace; text-transform: none; }
+.site-footer .footer-credits p { display: block; order: 0; margin: 0; font-size: inherit; }
+.footer-credits a { border-bottom: 1px solid rgba(247, 244, 234, .25); color: #c7cac0; }
+.footer-credits a:hover { border-color: #cdfc53; color: #cdfc53; }
+.footer-links a { color: #dfe1d7; text-decoration: none; text-transform: uppercase; }
+.row-price .price-warning { max-width: 14rem; color: #ffae86; text-transform: none; }

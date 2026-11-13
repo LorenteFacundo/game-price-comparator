@@ -97,7 +97,7 @@ test('currency controls keep USD prices in dollars and ARS prices with taxes', a
   await page.goto('/?q=Hades&steam=regional')
   await expect(page.getByRole('button', { name: 'ARS + IMP', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'USD', exact: true }).click()
-  await expect(page.getByText('$9.99').first()).toBeVisible()
+  await expect(page.getByText(/US\$\s?9,99/).first()).toBeVisible()
   await expect(page.getByText('USD · Sólo precios publicados en USD para Argentina. No se convierte ningún precio.')).toBeVisible()
   await expect(page.locator('.game-card').getByText('Steam', { exact: true })).not.toBeVisible()
 })
@@ -128,7 +128,7 @@ test('offers obey ARS plus tax and USD modes', async ({ page }) => {
 	await expect(balatro).toContainText('9.423')
 	await expect(balatro).toContainText('total con IVA 21%')
 	await page.getByRole('button', { name: 'USD', exact: true }).click()
-	await expect(page.locator('.deal-card').filter({ hasText: 'Balatro' }).first()).toContainText('$6.49')
+	await expect(page.locator('.deal-card').filter({ hasText: 'Balatro' }).first()).toContainText(/US\$\s?6,49/)
 })
 
 test('store filters preserve a regional variant of the same game', async ({ page }) => {
@@ -210,4 +210,50 @@ test('rankings show the Steam price and the cheapest store', async ({ page }) =>
   const cs = page.getByRole('button', { name: 'Comparar precios de Counter-Strike 2' })
   await expect(cs).toContainText('Gratis')
   await expect(cs).toContainText('Steam es la opción más barata')
+})
+
+test('footer credits the data sources and the author', async ({ page }) => {
+  await mockAPI(page)
+  await page.goto('/')
+  const footer = page.locator('footer')
+  await expect(footer.getByRole('link', { name: 'IsThereAnyDeal' })).toHaveAttribute('href', 'https://isthereanydeal.com/')
+  await expect(footer.getByRole('link', { name: 'LinkedIn' })).toHaveAttribute('href', /linkedin\.com\/in\//)
+  await expect(footer.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/LorenteFacundo')
+  await expect(footer.getByRole('link', { name: /Bot de Discord/ })).toHaveAttribute('href', /discord\.com\/oauth2\/authorize/)
+})
+
+test('USD mode never shows peso prices as dollars in the rankings', async ({ page }) => {
+  const priced = {
+    ...discover,
+    official_rate: 1200,
+    card_rate: 1452,
+    tax_rate: 0.21,
+    popular: [{ id: '1', title: 'Peso Game', image_url: '', steam_url: '', rank: 1, steam_price: { store_name: 'Steam', price: 12268.52, currency: 'ARS' }, best_price: { store_name: 'Steam', price: 12268.52, currency: 'ARS' } }],
+  }
+  await mockAPI(page, { discover: priced })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'USD', exact: true }).click()
+  const card = page.getByRole('button', { name: 'Comparar precios de Peso Game' })
+  await expect(card).toContainText(/\$\s?12\.269/)
+  await expect(card).not.toContainText('US$')
+  await expect(card).not.toContainText('12,268')
+})
+
+test('a suspiciously low price is shown with a warning but never wins', async ({ page }) => {
+  const suspicious = {
+    ...results,
+    results: [{
+      id: 'hades', title: 'Hades', image_url: '',
+      prices: [
+        { store_name: 'Microsoft Store', price: 359, regular: 359, currency: 'ARS', discount_percent: 0, url: 'https://ms.example/hades', warning: 'Precio inusualmente bajo: puede ser otro producto. Verificalo en la tienda.' },
+        { store_name: 'Steam', price: 7700, regular: 7700, currency: 'ARS', discount_percent: 0, url: 'https://steam.example/hades', is_regional: true },
+        { store_name: 'Epic Games Store', price: 7800, regular: 7800, currency: 'ARS', discount_percent: 0, url: 'https://epic.example/hades' },
+      ],
+    }],
+  }
+  await mockAPI(page, { results: suspicious })
+  await page.goto('/?q=Hades')
+  await expect(page.locator('.best-summary strong')).toContainText(/7\.700/)
+  await expect(page.getByText(/inusualmente bajo/)).toBeVisible()
+  await expect(page.locator('.price-row.is-best')).toContainText('Steam')
 })

@@ -16,6 +16,7 @@ const decoder = new TextDecoder();
 const PRIORITY_STORES = ["steam", "epic", "microsoft"];
 const MAX_QUERY_BYTES = 50;
 const MAX_CUSTOM_ID_LENGTH = 100;
+export const DATA_CREDIT = "Precios de IsThereAnyDeal y Steam";
 
 export function json(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -121,7 +122,8 @@ export function priceInARS(price, cardRate) {
 export function selectPrices(prices, cardRate) {
   const candidates = (prices || [])
     .map((price) => ({ ...price, finalARS: priceInARS(price, cardRate) }))
-    .filter((price) => price.finalARS !== null)
+    // El backend marca con "warning" los precios absurdamente bajos (producto mal asociado).
+    .filter((price) => price.finalARS !== null && !price.warning)
     .sort((left, right) => left.finalARS - right.finalARS || left.store_name?.localeCompare(right.store_name));
 
   const selected = [];
@@ -170,7 +172,7 @@ function storeField(price, isCheapest) {
     : "";
   const destination = validUrl(price.url) ? `[Ver tienda](${price.url})` : "Sin enlace directo";
   return {
-    name: `${isCheapest ? "🏆 Más barato · " : ""}${price.store_name || "Tienda"}`,
+    name: `${isCheapest ? "Más barato · " : ""}${price.store_name || "Tienda"}`,
     value: `${priceLabel(price)}${discount}\n${destination}`,
     inline: true,
   };
@@ -209,7 +211,8 @@ export function renderResult({ response, game, query, resultIndex, requesterId, 
       description: `[Abrir comparación completa](${webURL}) · Resultado ${resultIndex + 1} de ${resultCount}`,
       thumbnail: validUrl(game.image_url) ? { url: game.image_url } : undefined,
       fields,
-      footer: { text: `ARS + IVA · dólar tarjeta ${cardRate} · IVA ${tax}% · actualizado ${updated}${warning}` },
+      footer: { text: `ARS + IVA · dólar tarjeta ${cardRate} · IVA ${tax}% · actualizado ${updated}${warning}
+${DATA_CREDIT}` },
     }],
     components: [{
       type: 1,

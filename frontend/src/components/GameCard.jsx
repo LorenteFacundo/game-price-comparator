@@ -6,9 +6,11 @@ import GameImage from './GameImage'
 export default function GameCard({ game, currency, officialRate, cardRate, taxRate, isFavorite, onToggleFavorite, onReport }) {
   const [expanded, setExpanded] = useState(true)
 	const visiblePrices = (game.prices || []).filter((price) => Number.isFinite(price.price) && price.price >= 0 && ['ARS', 'USD'].includes(price.currency?.toUpperCase()) && (currency !== 'USD' || price.currency.toUpperCase() === 'USD'))
+	// Los precios marcados como sospechosos (warning) se muestran, pero nunca ganan.
+	const candidates = visiblePrices.filter((price) => !price.warning)
 	const bestDeal = currency === 'USD'
-		? [...visiblePrices].sort((left, right) => left.price - right.price)[0]
-		: [...visiblePrices].sort((left, right) => normalizedPrice(left, cardRate) - normalizedPrice(right, cardRate))[0]
+		? [...candidates].sort((left, right) => left.price - right.price)[0]
+		: [...candidates].sort((left, right) => normalizedPrice(left, cardRate) - normalizedPrice(right, cardRate))[0]
   const best = displayFinalMoney(bestDeal, currency, officialRate, cardRate, taxRate)
   return (
     <article className="game-card">
