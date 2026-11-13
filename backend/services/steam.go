@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"net/url"
@@ -15,7 +16,11 @@ import (
 	"game-price-comparator/models"
 )
 
-type SteamService struct{ client *http.Client }
+type SteamService struct {
+	client *http.Client
+	// apiBase permite apuntar a un servidor de prueba en los tests.
+	apiBase string
+}
 type SteamPrice struct {
 	Currency string
 	Price    float64
@@ -86,7 +91,6 @@ func (s *SteamService) GetDealSignals(ctx context.Context, deals []models.Featur
 					signal.AppID, _ = s.searchExactAppID(ctx, deal.Title)
 				}
 				if signal.AppID != "" {
-					signal.ReviewPct, signal.ReviewCount, _ = s.getReviewSummary(ctx, signal.AppID)
 					if deal.ImageURL == "" {
 						if appID, err := strconv.Atoi(signal.AppID); err == nil {
 							if game, ok := s.getBasicGame(ctx, appID); ok {
@@ -106,7 +110,123 @@ func (s *SteamService) GetDealSignals(ctx context.Context, deals []models.Featur
 	}
 	close(jobs)
 	wg.Wait()
+
+	// Las reseñas se piden todas juntas en una sola consulta a la API de Steam.
+	appIDs := make([]string, 0, len(result))
+	for _, signal := range result {
+		if signal.AppID != "" {
+			appIDs = append(appIDs, signal.AppID)
+		}
+	}
+	reviews, err := s.GetReviewSummaries(ctx, appIDs)
+	if err != nil {
+		log.Printf("steam_reviews_error error=%v", err)
+	}
+	for id, signal := range result {
+		if review, ok := reviews[signal.AppID]; ok {
+			signal.ReviewPct, signal.ReviewCount = review.Percent, review.Count
+			result[id] = signal
+		}
+	}
 	return result
+}
+
+// ReviewSummary resume las reseñas de un juego en Steam.
+type ReviewSummary struct {
+	Percent int
+	Count   int
+}
+
+const steamReviewsBatchSize = 50
+
+// GetReviewSummaries obtiene el porcentaje de reseñas positivas y la cantidad
+// total para varios appIDs usando IStoreBrowseService/GetItems, la API pública
+// que usa la propia tienda de Steam. Reemplaza a /appreviews, que dejó de
+// responder JSON (redirige a la portada).
+func (s *SteamService) GetReviewSummaries(ctx context.Context, appIDs []string) (map[string]ReviewSummary, error) {
+	summaries := make(map[string]ReviewSummary, len(appIDs))
+	unique := make([]int, 0, len(appIDs))
+	seen := make(map[int]struct{}, len(appIDs))
+	for _, appID := range appIDs {
+		id, err := strconv.Atoi(appID)
+		if err != nil || id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	for start := 0; start < len(unique); start += steamReviewsBatchSize {
+		batch := unique[start:min(start+steamReviewsBatchSize, len(unique))]
+		if err := s.fetchReviewBatch(ctx, batch, summaries); err != nil {
+			return summaries, err
+		}
+	}
+	return summaries, nil
+}
+
+func (s *SteamService) fetchReviewBatch(ctx context.Context, appIDs []int, summaries map[string]ReviewSummary) error {
+	type itemID struct {
+		AppID int `json:"appid"`
+	}
+	input := struct {
+		IDs     []itemID `json:"ids"`
+		Context struct {
+			Language    string `json:"language"`
+			CountryCode string `json:"country_code"`
+		} `json:"context"`
+		DataRequest struct {
+			IncludeReviews bool `json:"include_reviews"`
+		} `json:"data_request"`
+	}{}
+	for _, id := range appIDs {
+		input.IDs = append(input.IDs, itemID{AppID: id})
+	}
+	input.Context.Language, input.Context.CountryCode = "spanish", "AR"
+	input.DataRequest.IncludeReviews = true
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	endpoint := s.apiBase + "/IStoreBrowseService/GetItems/v1/?input_json=" + url.QueryEscape(string(encoded))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("consultando reseñas de Steam: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("reseñas de Steam respondió con status %d", resp.StatusCode)
+	}
+	var payload struct {
+		Response struct {
+			StoreItems []struct {
+				AppID   int `json:"appid"`
+				Success int `json:"success"`
+				Reviews *struct {
+					SummaryFiltered struct {
+						ReviewCount     int `json:"review_count"`
+						PercentPositive int `json:"percent_positive"`
+					} `json:"summary_filtered"`
+				} `json:"reviews"`
+			} `json:"store_items"`
+		} `json:"response"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return fmt.Errorf("parseando reseñas de Steam: %w", err)
+	}
+	for _, item := range payload.Response.StoreItems {
+		if item.Success != 1 || item.AppID == 0 || item.Reviews == nil || item.Reviews.SummaryFiltered.ReviewCount == 0 {
+			continue
+		}
+		summaries[strconv.Itoa(item.AppID)] = ReviewSummary{Percent: item.Reviews.SummaryFiltered.PercentPositive, Count: item.Reviews.SummaryFiltered.ReviewCount}
+	}
+	return nil
 }
 
 func selectDealsForSignals(deals []models.FeaturedDeal, popular map[string]SteamTopSeller, played map[string]models.RankedGame, limit int) []models.FeaturedDeal {
@@ -193,7 +313,7 @@ type steamResponse map[string]struct {
 }
 
 func NewSteamService() *SteamService {
-	return &SteamService{client: &http.Client{Timeout: 8 * time.Second}}
+	return &SteamService{client: &http.Client{Timeout: 8 * time.Second}, apiBase: "https://api.steampowered.com"}
 }
 func (s *SteamService) GetPriceByTitle(ctx context.Context, title, country string) (*SteamPrice, error) {
 	appID, err := s.searchAppID(ctx, title)
@@ -493,34 +613,4 @@ func (s *SteamService) searchExactAppID(ctx context.Context, title string) (stri
 		}
 	}
 	return "", nil
-}
-
-func (s *SteamService) getReviewSummary(ctx context.Context, appID string) (int, int, error) {
-	endpoint := fmt.Sprintf("https://store.steampowered.com/appreviews/%s?json=1&language=all&purchase_type=all&num_per_page=0", url.QueryEscape(appID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("reseñas Steam respondió con status %d", resp.StatusCode)
-	}
-	var payload struct {
-		QuerySummary struct {
-			TotalPositive int `json:"total_positive"`
-			TotalReviews  int `json:"total_reviews"`
-		} `json:"query_summary"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return 0, 0, err
-	}
-	if payload.QuerySummary.TotalReviews == 0 {
-		return 0, 0, nil
-	}
-	pct := int(math.Round(float64(payload.QuerySummary.TotalPositive) / float64(payload.QuerySummary.TotalReviews) * 100))
-	return pct, payload.QuerySummary.TotalReviews, nil
 }
