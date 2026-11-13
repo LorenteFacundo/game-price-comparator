@@ -12,6 +12,8 @@ import {
   verifyDiscordSignature,
 } from "./pricepulse.js";
 
+const USER_AGENT = "DiscordBot (https://github.com/LorenteFacundo/game-price-comparator, 1.0)";
+
 const PRIVATE = (content) => json({ type: DISCORD.CHANNEL_MESSAGE, data: { content, flags: DISCORD.EPHEMERAL } });
 
 function validWorkerConfig(env) {
@@ -82,10 +84,15 @@ async function editOriginal(job, payload, fetchImpl = fetch) {
   const endpoint = `https://discord.com/api/v10/webhooks/${job.application_id}/interactions/${job.interaction_token}/messages/@original`;
   const response = await fetchImpl(endpoint, {
     method: "PATCH",
-    headers: { "content-type": "application/json" },
+    // Discord exige un User-Agent identificable; los Workers no envían uno por
+    // defecto y algunas respuestas terminan bloqueadas sin él.
+    headers: { "content-type": "application/json", "user-agent": USER_AGENT },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(`discord_${response.status}`);
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).slice(0, 300);
+    throw new Error(`discord_${response.status} ${detail}`.trim());
+  }
 }
 
 export async function processJob(job, env, { fetchImpl = fetch } = {}) {
@@ -98,7 +105,9 @@ export async function processJob(job, env, { fetchImpl = fetch } = {}) {
     payload = game
       ? renderResult({ response, game, query: job.query, resultIndex: index, requesterId: job.requester_id, frontendURL: env.FRONTEND_URL })
       : renderFailure(`No encontré coincidencias para **${job.query}**. Probá con otro nombre.`);
-  } catch {
+  } catch (error) {
+    // Se registra sólo el motivo técnico; nunca la búsqueda ni el usuario.
+    console.error("pricepulse_backend_error", error?.message);
     payload = renderFailure("No pude consultar los precios ahora. PricePulse va a reintentar si Discord no recibió esta actualización; si persiste, probá nuevamente en un minuto.");
   }
   await editOriginal(job, payload, fetchImpl);
@@ -109,7 +118,8 @@ export async function consumeQueue(batch, env, options = {}) {
     try {
       await processJob(message.body, env, options);
       message.ack();
-    } catch {
+    } catch (error) {
+      console.error("pricepulse_discord_edit_error", error?.message, `attempt=${message.attempts ?? "?"}`);
       message.retry();
     }
   }

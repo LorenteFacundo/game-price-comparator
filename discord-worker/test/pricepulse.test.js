@@ -167,3 +167,18 @@ test("queue returns friendly no-results and provider-failure messages without ex
   assert.match(outagePatches[0].content, /No pude consultar los precios/);
   assert.equal(outage.acked, 1);
 });
+
+test("edits Discord with a bot User-Agent", async () => {
+  const env = { BACKEND_URL: "https://api.example", FRONTEND_URL: "https://web.example" };
+  let discordHeaders;
+  const fetchImpl = async (url, init = {}) => {
+    if (String(url).startsWith("https://discord.com")) {
+      discordHeaders = init.headers;
+      return new Response("{}", { status: 200 });
+    }
+    return new Response(JSON.stringify({ results: [] }), { status: 200 });
+  };
+  const message = { body: { application_id: "app-1", interaction_token: "token", query: "Hades", result_index: 0, requester_id: "123" }, ack() {}, retry() {} };
+  await consumeQueue({ messages: [message] }, env, { fetchImpl });
+  assert.match(discordHeaders["user-agent"], /^DiscordBot \(/);
+});
