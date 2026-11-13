@@ -55,7 +55,7 @@ export async function getDeals(signal) {
 export async function getDiscover(signal) {
   try {
     const { data } = await api.get('/api/discover', { signal })
-    return { popular: data.popular || [], mostPlayed: data.most_played || [], updatedAt: data.updated_at || '', warnings: data.warnings || [] }
+    return { popular: data.popular || [], mostPlayed: data.most_played || [], officialRate: data.official_rate || 0, cardRate: data.card_rate || 0, taxRate: data.tax_rate || 0, updatedAt: data.updated_at || '', warnings: data.warnings || [] }
   } catch (error) {
     if (axios.isCancel(error)) throw error
     throw new Error(messageFrom(error, 'No pudimos cargar los rankings de Steam.'), { cause: error })

@@ -219,3 +219,9 @@ main { padding-top: clamp(1.5rem, 4vw, 3rem); }
   .footer-links { grid-column: 1; gap: .75rem 1rem; }
   .changes-list li { grid-template-columns: 5.5rem 1fr; }
 }
+.rank-prices { display: grid; gap: .3rem; margin: 0; padding: .1rem .8rem .65rem; }
+.rank-prices > div { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; min-width: 0; }
+.rank-prices dt { overflow: hidden; color: #a8aba2; font: 500 .6rem 'DM Mono', monospace; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.rank-prices dd { margin: 0; flex: 0 0 auto; color: #f7f4ea; font-size: .86rem; font-weight: 800; }
+.rank-prices .is-best dd { color: #cdfc53; }
+.rank-prices .rank-best-note dt { color: #cdfc53; }

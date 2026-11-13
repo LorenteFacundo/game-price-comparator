@@ -1,4 +1,5 @@
 import { displayFinalMoney } from '../api/client'
+import GameImage from './GameImage'
 
 export default function DealCard({ deal, currency, officialRate, cardRate, taxRate, onSearch, onReport, lead = false }) {
 	const price = displayFinalMoney(deal, currency, officialRate, cardRate, taxRate)
@@ -7,7 +8,7 @@ export default function DealCard({ deal, currency, officialRate, cardRate, taxRa
   return (
     <article className={`deal-card${lead ? ' deal-card-lead' : ''}`}>
       <a href={deal.url} target="_blank" rel="noopener noreferrer" className="deal-image-link" aria-label={`Ver ${deal.title} en ${deal.store_name}`}>
-        {deal.image_url ? <img src={deal.image_url} alt="" width="300" height="140" loading="lazy" /> : <div className="image-fallback" aria-hidden="true">✦</div>}
+        <GameImage src={deal.image_url} />
       </a>
       <div className="deal-content">
         <div className="deal-meta">

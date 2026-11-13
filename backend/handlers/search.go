@@ -18,12 +18,14 @@ const (
 	cacheTTL              = 5 * time.Minute
 	maxSearchCacheEntries = 500
 	dealsRequestTimeout   = 15 * time.Second
+	rankingPricesTimeout  = 8 * time.Second
 )
 
 type itadProvider interface {
 	Search(context.Context, string) ([]models.GameResult, error)
 	GetDeals(context.Context, int) ([]models.FeaturedDeal, error)
 	GetPopularDeals(context.Context, int) ([]models.FeaturedDeal, error)
+	PricesForSteamApps(context.Context, []string) (map[string][]models.StorePrice, error)
 }
 type currencyProvider interface {
 	GetRates(context.Context) (services.ExchangeRates, error)
@@ -333,9 +335,67 @@ func (h *SearchHandler) HandleDiscover(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, models.DiscoverResponse{Error: "No pudimos cargar los rankings de Steam ahora."})
 		return
 	}
+	h.attachRankingPrices(r.Context(), &response)
 	h.storeDiscover(response)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, response)
+}
+
+// attachRankingPrices suma a cada juego de los rankings su precio en Steam y
+// el más barato entre todas las tiendas. Si falla, los rankings se muestran
+// igual, sin precios, y se avisa.
+func (h *SearchHandler) attachRankingPrices(ctx context.Context, response *models.DiscoverResponse) {
+	ctx, cancel := context.WithTimeout(ctx, rankingPricesTimeout)
+	defer cancel()
+	seen := make(map[string]struct{})
+	appIDs := make([]string, 0, len(response.Popular)+len(response.MostPlayed))
+	for _, games := range [][]models.RankedGame{response.Popular, response.MostPlayed} {
+		for _, game := range games {
+			if _, ok := seen[game.ID]; ok || game.ID == "" {
+				continue
+			}
+			seen[game.ID] = struct{}{}
+			appIDs = append(appIDs, game.ID)
+		}
+	}
+	type pricesResult struct {
+		prices map[string][]models.StorePrice
+		err    error
+	}
+	pricesChannel := make(chan pricesResult, 1)
+	go func() {
+		prices, err := h.itad.PricesForSteamApps(ctx, appIDs)
+		pricesChannel <- pricesResult{prices: prices, err: err}
+	}()
+	comparisonRate := 0.0
+	if rates, err := h.currency.GetRates(ctx); err == nil {
+		response.OfficialRate = rates.Official
+		response.TaxRate = h.taxRate
+		response.CardRate = rates.Official * (1 + h.taxRate)
+		comparisonRate = response.CardRate
+	}
+	loaded := <-pricesChannel
+	if loaded.err != nil {
+		response.Warnings = append(response.Warnings, "No pudimos cargar los precios de los rankings.")
+		return
+	}
+	for _, games := range [][]models.RankedGame{response.Popular, response.MostPlayed} {
+		for index := range games {
+			prices := loaded.prices[games[index].ID]
+			if len(prices) == 0 {
+				continue
+			}
+			sorted, best := sortPricesAndPickBest(prices, comparisonRate)
+			games[index].BestPrice = best
+			for _, price := range sorted {
+				if strings.EqualFold(price.StoreName, "Steam") {
+					steam := price
+					games[index].SteamPrice = &steam
+					break
+				}
+			}
+		}
+	}
 }
 
 func rankedTopSellers(games []services.SteamTopSeller) []models.RankedGame {

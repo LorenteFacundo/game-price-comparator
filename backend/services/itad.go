@@ -281,3 +281,61 @@ func isFeaturedStore(storeName string) bool {
 func isEligibleFeaturedDeal(deal itadDeal) bool {
 	return isFeaturedStore(deal.Shop.Name) && deal.Cut > 0
 }
+
+// steamShopID es el identificador de Steam en IsThereAnyDeal.
+const steamShopID = 61
+
+// PricesForSteamApps devuelve los precios en todas las tiendas para una lista
+// de appIDs de Steam, indexados por appID. Usa el lookup por tienda de ITAD
+// (una sola request para todos los juegos) y luego un único pedido de precios.
+func (s *ITADService) PricesForSteamApps(ctx context.Context, appIDs []string) (map[string][]models.StorePrice, error) {
+	if len(appIDs) == 0 {
+		return map[string][]models.StorePrice{}, nil
+	}
+	keys := make([]string, 0, len(appIDs))
+	for _, appID := range appIDs {
+		keys = append(keys, "app/"+appID)
+	}
+	body, err := json.Marshal(keys)
+	if err != nil {
+		return nil, err
+	}
+	req, err := s.newRequest(ctx, http.MethodPost, fmt.Sprintf("%s/lookup/id/shop/%d/v1", itadBaseURL, steamShopID), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	var lookup map[string]*string
+	if err := s.doJSON(req, &lookup); err != nil {
+		return nil, fmt.Errorf("lookup Steam en ITAD: %w", err)
+	}
+	appByITAD := make(map[string]string, len(lookup))
+	ids := make([]string, 0, len(lookup))
+	for key, itadID := range lookup {
+		if itadID == nil || *itadID == "" {
+			continue
+		}
+		appByITAD[*itadID] = strings.TrimPrefix(key, "app/")
+		ids = append(ids, *itadID)
+	}
+	prices := make(map[string][]models.StorePrice, len(ids))
+	if len(ids) == 0 {
+		return prices, nil
+	}
+	results, err := s.getPrices(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		appID, ok := appByITAD[result.ID]
+		if !ok {
+			continue
+		}
+		storePrices := make([]models.StorePrice, 0, len(result.Deals))
+		for _, deal := range result.Deals {
+			storePrices = append(storePrices, storePriceFromDeal(deal))
+		}
+		prices[appID] = storePrices
+	}
+	return prices, nil
+}

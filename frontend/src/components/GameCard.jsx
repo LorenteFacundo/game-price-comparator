@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { displayFinalMoney } from '../api/client'
 import PriceRow from './PriceRow'
+import GameImage from './GameImage'
 
 export default function GameCard({ game, currency, officialRate, cardRate, taxRate, isFavorite, onToggleFavorite, onReport }) {
   const [expanded, setExpanded] = useState(true)
@@ -12,7 +13,7 @@ export default function GameCard({ game, currency, officialRate, cardRate, taxRa
   return (
     <article className="game-card">
       <div className="game-cover">
-        {game.image_url ? <img src={game.image_url} alt="" width="300" height="140" loading="lazy" /> : <div className="image-fallback" aria-hidden="true">◌</div>}
+        <GameImage src={game.image_url} fallback="◌" />
       </div>
       <div className="game-main">
         <div className="game-heading">

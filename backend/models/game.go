@@ -54,6 +54,9 @@ type RankedGame struct {
 	SteamURL string `json:"steam_url"`
 	Rank     int    `json:"rank"`
 	Players  int    `json:"players,omitempty"`
+	// Precio actual en Steam y el más barato entre todas las tiendas.
+	SteamPrice *StorePrice `json:"steam_price,omitempty"`
+	BestPrice  *StorePrice `json:"best_price,omitempty"`
 }
 
 type SearchResponse struct {
@@ -85,9 +88,12 @@ type DealsResponse struct {
 }
 
 type DiscoverResponse struct {
-	Popular    []RankedGame `json:"popular"`
-	MostPlayed []RankedGame `json:"most_played"`
-	UpdatedAt  string       `json:"updated_at"`
-	Warnings   []string     `json:"warnings,omitempty"`
-	Error      string       `json:"error,omitempty"`
+	Popular      []RankedGame `json:"popular"`
+	MostPlayed   []RankedGame `json:"most_played"`
+	OfficialRate float64      `json:"official_rate,omitempty"`
+	CardRate     float64      `json:"card_rate,omitempty"`
+	TaxRate      float64      `json:"tax_rate,omitempty"`
+	UpdatedAt    string       `json:"updated_at"`
+	Warnings     []string     `json:"warnings,omitempty"`
+	Error        string       `json:"error,omitempty"`
 }

@@ -10,7 +10,7 @@ import { useLocalStorage } from './hooks/useLocalStorage'
 
 const emptySearch = { results: [], usdRate: 0, officialRate: 0, cardRate: 0, taxRate: 0, ratesUpdatedAt: '', ratesStale: false, updatedAt: '', warnings: [] }
 const emptyDeals = { featured: [], free: [], discounts: [], officialRate: 0, cardRate: 0, taxRate: 0, ratesUpdatedAt: '', ratesStale: false, updatedAt: '', warnings: [] }
-const emptyDiscover = { popular: [], mostPlayed: [], updatedAt: '', warnings: [] }
+const emptyDiscover = { popular: [], mostPlayed: [], officialRate: 0, cardRate: 0, taxRate: 0, updatedAt: '', warnings: [] }
 const refreshInterval = 5 * 60 * 1000
 const wakeUpNoticeDelay = 4000
 const maxStartupRetries = 2
@@ -136,6 +136,12 @@ export default function App() {
     setFavorites((items) => items.some((item) => item.id === game.id) ? items.filter((item) => item.id !== game.id) : [game, ...items].slice(0, 24))
   }
 
+  const rankingPriceProps = {
+    currency,
+    officialRate: discover.officialRate || deals.officialRate,
+    cardRate: discover.cardRate || deals.cardRate,
+    taxRate: discover.taxRate || deals.taxRate,
+  }
   const favoriteIds = new Set(favorites.map((game) => game.id))
   const taxPercent = Math.round(search.taxRate * 100)
   const formattedCardRate = search.cardRate > 0 ? formatRate(search.cardRate) : 'no disponible'
@@ -165,12 +171,12 @@ export default function App() {
         {!hasSearched && !loading && <>
           <section className="rank-section" aria-labelledby="popular-title">
             <div className="section-heading"><h2 id="popular-title">Populares en Steam</h2></div>
-            {discoverLoading ? <div className="rank-grid" aria-label="Cargando populares">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : discover.popular.length > 0 && <div className="rank-grid">{discover.popular.map((game) => <RankedGameCard key={game.id} game={game} onSearch={runSearch} />)}</div>}
+            {discoverLoading ? <div className="rank-grid" aria-label="Cargando populares">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : discover.popular.length > 0 && <div className="rank-grid">{discover.popular.map((game) => <RankedGameCard key={game.id} game={game} onSearch={runSearch} {...rankingPriceProps} />)}</div>}
           </section>
 
           <section className="rank-section" aria-labelledby="most-played-title">
             <div className="section-heading"><h2 id="most-played-title">Más jugados en Steam</h2></div>
-            {discoverLoading ? <div className="rank-grid" aria-label="Cargando más jugados">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : discover.mostPlayed.length > 0 && <div className="rank-grid">{discover.mostPlayed.map((game) => <RankedGameCard key={game.id} game={game} onSearch={runSearch} showPlayers />)}</div>}
+            {discoverLoading ? <div className="rank-grid" aria-label="Cargando más jugados">{Array.from({ length: 4 }, (_, index) => <div className="deal-skeleton" key={index} />)}</div> : discover.mostPlayed.length > 0 && <div className="rank-grid">{discover.mostPlayed.map((game) => <RankedGameCard key={game.id} game={game} onSearch={runSearch} {...rankingPriceProps} showPlayers />)}</div>}
           </section>
 
           <OffersSection deals={deals} loading={dealsLoading} currency={currency} onSearch={runSearch} onReport={(context) => openSupport('feedback', context)} />

@@ -187,3 +187,27 @@ test('a slow cold start explains that the server is waking up', async ({ page })
   await expect(notice).toBeHidden({ timeout: 8000 })
   await expect(page.getByText('Balatro').first()).toBeVisible()
 })
+
+test('rankings show the Steam price and the cheapest store', async ({ page }) => {
+  const priced = {
+    ...discover,
+    official_rate: 1200,
+    card_rate: 1452,
+    tax_rate: 0.21,
+    popular: [
+      { id: '1145360', title: 'Hades', image_url: 'https://images.invalid/hades.jpg', steam_url: '', rank: 1, steam_price: { store_name: 'Steam', price: 10, currency: 'USD' }, best_price: { store_name: 'GOG', price: 5, currency: 'USD' } },
+      { id: '730', title: 'Counter-Strike 2', image_url: '', steam_url: '', rank: 2, steam_price: { store_name: 'Steam', price: 0, currency: 'USD' }, best_price: { store_name: 'Steam', price: 0, currency: 'USD' } },
+    ],
+  }
+  await mockAPI(page, { discover: priced })
+  await page.goto('/')
+  const hades = page.getByRole('button', { name: 'Comparar precios de Hades' })
+  await expect(hades).toContainText('Steam')
+  await expect(hades).toContainText(/14\.520/)
+  await expect(hades).toContainText('Más barato · GOG')
+  await expect(hades).toContainText(/7\.260/)
+  await expect(hades.locator('.image-fallback')).toBeVisible()
+  const cs = page.getByRole('button', { name: 'Comparar precios de Counter-Strike 2' })
+  await expect(cs).toContainText('Gratis')
+  await expect(cs).toContainText('Steam es la opción más barata')
+})

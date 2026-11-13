@@ -16,6 +16,8 @@ import (
 type fakeITAD struct {
 	deals, popular       []models.FeaturedDeal
 	dealsErr, popularErr error
+	steamPrices          map[string][]models.StorePrice
+	steamPricesErr       error
 }
 
 func (f fakeITAD) Search(context.Context, string) ([]models.GameResult, error) { return nil, nil }
@@ -24,6 +26,9 @@ func (f fakeITAD) GetDeals(context.Context, int) ([]models.FeaturedDeal, error) 
 }
 func (f fakeITAD) GetPopularDeals(context.Context, int) ([]models.FeaturedDeal, error) {
 	return f.popular, f.popularErr
+}
+func (f fakeITAD) PricesForSteamApps(context.Context, []string) (map[string][]models.StorePrice, error) {
+	return f.steamPrices, f.steamPricesErr
 }
 
 type fakeCurrency struct {
@@ -38,6 +43,7 @@ func (f fakeCurrency) GetRates(context.Context) (services.ExchangeRates, error) 
 type fakeSteam struct {
 	featured                []models.FeaturedDeal
 	featuredErr, popularErr error
+	mostPlayed              []models.RankedGame
 }
 
 func (f fakeSteam) GetPriceByTitle(context.Context, string, string) (*services.SteamPrice, error) {
@@ -52,7 +58,9 @@ func (f fakeSteam) GetSteamFeaturedDeals(context.Context, int) ([]models.Feature
 func (f fakeSteam) GetDealSignals(context.Context, []models.FeaturedDeal, []services.SteamTopSeller, []models.RankedGame) map[string]services.SteamDealSignal {
 	return nil
 }
-func (f fakeSteam) GetMostPlayed(context.Context, int) ([]models.RankedGame, error) { return nil, nil }
+func (f fakeSteam) GetMostPlayed(context.Context, int) ([]models.RankedGame, error) {
+	return f.mostPlayed, nil
+}
 
 func TestSortPricesAndPickBestPrefersLowestNormalizedPrice(t *testing.T) {
 	prices := []models.StorePrice{
@@ -164,5 +172,55 @@ func TestSearchCachePurgesExpiredAndCapsEntries(t *testing.T) {
 	}
 	if _, exists := handler.searchCache["expired"]; exists {
 		t.Fatal("expected expired entry to be purged")
+	}
+}
+
+func TestDiscoverAddsSteamAndBestPriceToRankings(t *testing.T) {
+	handler := NewSearchHandler(
+		fakeITAD{steamPrices: map[string][]models.StorePrice{
+			"100": {
+				{StoreName: "Steam", Price: 20, Currency: "USD"},
+				{StoreName: "Epic Games Store", Price: 15, Currency: "USD"},
+			},
+		}},
+		fakeCurrency{rates: services.ExchangeRates{Official: 1000, Blue: 1200}},
+		fakeSteam{mostPlayed: []models.RankedGame{{ID: "100", Title: "Priced"}, {ID: "200", Title: "Unpriced"}}},
+		0.21,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleDiscover(response, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
+
+	var body models.DiscoverResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || len(body.MostPlayed) != 2 {
+		t.Fatalf("unexpected response: status=%d body=%+v", response.Code, body)
+	}
+	priced := body.MostPlayed[0]
+	if priced.SteamPrice == nil || priced.SteamPrice.Price != 20 {
+		t.Fatalf("expected Steam price, got %+v", priced.SteamPrice)
+	}
+	if priced.BestPrice == nil || priced.BestPrice.StoreName != "Epic Games Store" {
+		t.Fatalf("expected Epic as best price, got %+v", priced.BestPrice)
+	}
+	if body.CardRate != 1210 || body.MostPlayed[1].SteamPrice != nil || body.MostPlayed[1].BestPrice != nil {
+		t.Fatalf("unexpected card rate or prices for unpriced game: %+v", body)
+	}
+}
+
+func TestDiscoverKeepsRankingsWhenPricesFail(t *testing.T) {
+	handler := NewSearchHandler(
+		fakeITAD{steamPricesErr: errors.New("down")},
+		fakeCurrency{rates: services.ExchangeRates{Official: 1000, Blue: 1200}},
+		fakeSteam{mostPlayed: []models.RankedGame{{ID: "100", Title: "Game"}}},
+		0.21,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleDiscover(response, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
+	var body models.DiscoverResponse
+	_ = json.NewDecoder(response.Body).Decode(&body)
+	if response.Code != http.StatusOK || len(body.MostPlayed) != 1 || len(body.Warnings) == 0 {
+		t.Fatalf("expected rankings with a warning, got status=%d body=%+v", response.Code, body)
 	}
 }
